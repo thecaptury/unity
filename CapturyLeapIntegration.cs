@@ -87,12 +87,6 @@ public class CapturyLeapIntegration : MonoBehaviour
 		}
 	}
 
-	//=============================
-	// this is run once at startup
-	//=============================
-	void Start()
-	{
-	}
 
 	//==========================
 	// this is run once at exit
@@ -179,3 +173,20 @@ public class CapturyLeapIntegration : MonoBehaviour
 		}
 	}
 }
+    //=============================
+    // this is run once at startup
+    //=============================
+    void Start()
+    {
+        networkPlugin = GetComponent<CapturyNetworkPlugin>();
+        if (networkPlugin == null)
+        {
+            Debug.LogError("No CapturyNetworkPlugin attached to " + name);
+        }
+
+        leapProvider = FindObjectOfType<LeapProvider>();
+        if (leapProvider == null)
+        {
+            Debug.LogError("No LeapProvider in Scene");
+        }
+    }
