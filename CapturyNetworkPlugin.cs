@@ -198,10 +198,13 @@ public class CapturyNetworkPlugin : MonoBehaviour
     public float scaleFactor = 0.001f; // mm to m
     public int actorCheckTimeout = 500; // in ms
 
+    // Events
 	public delegate void FoundSkeletonDelegate(CapturySkeleton skeleton);
-	public delegate void LostSkeletonDelegate(CapturySkeleton skeleton);
-	public FoundSkeletonDelegate foundSkeleton;
-	public LostSkeletonDelegate lostSkeleton;
+    public event FoundSkeletonDelegate foundSkeleton;
+    public delegate void LostSkeletonDelegate(CapturySkeleton skeleton);
+	public event LostSkeletonDelegate lostSkeleton;
+    public delegate void CamerasChangedDelegate(Vector3[] positions, Quaternion[] rotations);
+    public event CamerasChangedDelegate CamerasChanged;
 
     public Vector3[] cameraPositions;
     public Quaternion[] cameraOrientations;
@@ -361,6 +364,8 @@ public class CapturyNetworkPlugin : MonoBehaviour
                         cameraPositions[i] = ConvertPosition(new Vector3(camera.positionX, camera.positionY, camera.positionZ));
                         cameraOrientations[i] = ConvertRotation(new Vector3(camera.orientationX, camera.orientationY, camera.orientationZ));
                     }
+                    // Fire cameras changed event
+                    CamerasChanged(cameraPositions, cameraOrientations);
                 }
             }
             if (isSetup)
