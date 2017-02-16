@@ -210,7 +210,6 @@ public class CapturyNetworkPlugin : MonoBehaviour
     public Quaternion[] cameraOrientations;
 
     private string headJointName = "Head";
-    public Transform headTransform;
 	
     // threading data for communication with server
     private Thread communicationThread;
