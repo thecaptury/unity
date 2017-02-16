@@ -7,7 +7,6 @@ using UnityEngine;
 //====================
 public class CapturyLeapIntegration : MonoBehaviour
 {
-	public Leap.Unity.LeapProvider leapProvider;
 	public int targetCapturyActorId = -1;	// id of CapturySkeleton
 	public Transform leftTargetHand;		// transform of left hand
 	public Transform rightTargetHand;		// transform of right hand
@@ -32,6 +31,8 @@ public class CapturyLeapIntegration : MonoBehaviour
 		leftTargetHand = left;
 		rightTargetHand = right;
 
+[RequireComponent(typeof(CapturyNetworkPlugin))]
+    private LeapProvider leapProvider;
 		if (leapProvider && leftTargetHand && rightTargetHand) {
 			String[] names = new String[] {"HandThumb1", "HandIndex1", "HandMiddle1", "HandRing1", "HandPinky1"};
 			leftFingers = new Transform[15];
