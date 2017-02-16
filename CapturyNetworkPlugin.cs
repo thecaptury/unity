@@ -1,12 +1,9 @@
-﻿// kate: space-indent on; indent-width 4;
-using UnityEngine;
-using UnityEngine.UI;
-using System;
-using System.Text;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Threading;
 using System.Runtime.InteropServices;
+using System.Threading;
+using UnityEngine;
 
 //=================================
 // define captury class structures

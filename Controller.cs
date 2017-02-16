@@ -1,12 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI;
-using System;
-using System.Text;
-using System.Threading;
-using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
-using Leap.Unity;
+
 
 //====================
 // integrates leap motion based hand tracking with The Captury's full body tracking
