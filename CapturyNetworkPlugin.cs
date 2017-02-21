@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Text;
 using UnityEngine;
 
 namespace Captury
@@ -30,7 +31,7 @@ namespace Captury
         public IntPtr joints;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct CapturyPose
     {
         public int actor;
@@ -49,7 +50,7 @@ namespace Captury
         public IntPtr data;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct CapturyTransform
     {
         public float rx; // rotation euler angles
@@ -60,7 +61,7 @@ namespace Captury
         public float tz;
     }
 
-    [StructLayout(LayoutKind.Sequential)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     public struct CapturyCamera
     {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
@@ -294,8 +295,8 @@ namespace Captury
                 CapturyPose pose = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
 
                 // get the data into a float array
-                float[] values = new float[pose.numValues];
-                Marshal.Copy(pose.values, values, 0, pose.numValues);
+                float[] values = new float[pose.numValues * 6];
+                Marshal.Copy(pose.values, values, 0, pose.numValues * 6);
 
                 // now loop over all joints
                 Vector3 pos = new Vector3();
@@ -349,9 +350,9 @@ namespace Captury
                     else
                         Debug.Log(String.Format("Unable to connect to Captury Live at {0}:{1} ", host, port));
 
-                    IntPtr cameraData = IntPtr.Zero;
+					IntPtr cameraData = IntPtr.Zero;
                     int numCameras = Captury_getCameras(out cameraData);
-                    if (numCameras > 0 && cameraData != IntPtr.Zero)
+					if (numCameras > 0 && cameraData != IntPtr.Zero)
                     {
                         cameraPositions = new Vector3[numCameras];
                         cameraOrientations = new Quaternion[numCameras];
@@ -367,20 +368,21 @@ namespace Captury
                             cameraOrientations[i] = ConvertRotation(new Vector3(camera.orientationX, camera.orientationY, camera.orientationZ));
                         }
                         // Fire cameras changed event
-                        CamerasChanged(cameraPositions, cameraOrientations);
+						if (CamerasChanged != null)
+							CamerasChanged(cameraPositions, cameraOrientations);
                     }
                 }
                 if (isSetup)
                 {
-                    // grab actors
+					// grab actors
                     IntPtr actorData = IntPtr.Zero;
                     int numActors = Captury_getActors(out actorData);
                     if (numActors > 0 && actorData != IntPtr.Zero)
                     {
-                        //Debug.Log(String.Format("Successfully received {0} actors", numActors));
+                        Debug.Log(String.Format("Received {0} actors", numActors));
 
                         // create actor struct
-                        int szStruct = Marshal.SizeOf(typeof(CapturyActor));
+                        int szStruct = Marshal.SizeOf(typeof(CapturyActor)) + 16; // implicit padding
                         for (uint i = 0; i < numActors; i++)
                         {
                             // get an actor
