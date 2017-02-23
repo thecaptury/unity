@@ -118,6 +118,8 @@ namespace Captury
                 networkPlugin.foundSkeleton -= FoundSkeleton;
                 networkPlugin.lostSkeleton -= LostSkeleton;
             }
+
+            SceneManager.activeSceneChanged -= OnActiveSceneChanged;
         }
 
         void Update()
