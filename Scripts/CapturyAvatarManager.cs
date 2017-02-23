@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Captury
 {
@@ -17,6 +18,16 @@ namespace Captury
         [SerializeField]
         [Tooltip("If true, first found skeleton will be assigned to local player")]
         private bool assignFirstSkeleton;
+
+        /// <summary>
+        /// List of all existing avatars
+        /// </summary>
+        private List<GameObject> avatars;
+
+        /// <summary>
+        /// Coordinate system origin for all avatars
+        /// </summary>
+        private CapturyOrigin capturyOrigin;
 
         /// <summary>
         /// The OVRCameraRig which will be manipulated by the captury tracking
@@ -69,11 +80,18 @@ namespace Captury
         private const string AVATAR_RIGHT_HAND_TRANSFORM_NAME = "RightFingerBase";
         private const string AVATAR_HEAD_TRANSFORM_NAME = "Head";
 
+
+
         void Start()
         {
             LoadConfig();
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
             capturyLeapIntegration = GetComponent<CapturyLeapIntegration>();
+            // instantiate a list of all avatars to keep track when scene is changed
+            avatars = new List<GameObject>();
+            // find CapturyOrigin to define spawn position of avatars
+            capturyOrigin = FindObjectOfType<CapturyOrigin>();
+            networkPlugin.SetCapturyOrigin(capturyOrigin);
 
             ovrCameraRig = FindObjectOfType<OVRCameraRig>();
             if (ovrCameraRig == null)
@@ -87,6 +105,9 @@ namespace Captury
             // register for skeleton events
             networkPlugin.foundSkeleton += FoundSkeleton;
             networkPlugin.lostSkeleton += LostSkeleton;
+
+            // register for scene change events
+            SceneManager.activeSceneChanged += OnActiveSceneChanged;
         }
 
         void OnDestroy()
@@ -122,6 +143,7 @@ namespace Captury
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
             {
+                Debug.Log("Found Skeletons");
                 newSkeletons.Add(skeleton);
             }
         }
@@ -158,10 +180,42 @@ namespace Captury
                     GameObject actor = Instantiate(avatarTemplateObject);
                     DontDestroyOnLoad(actor);
                     actor.SetActive(true);
+                    avatars.Add(actor);
+                    // Set origin of avatar to captury origin, if it exists. Otherwise keep world origin.
+                    SetAvatarToOrigin(actor);
                     skel.mesh = actor;
                     trackedSkeletons.Add(skel);
                 }
                 skeletons.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Set a given avatar's origin to CapturyOrigin, if existent.
+        /// </summary>
+        /// <param name="avatar"></param>
+        private void SetAvatarToOrigin(GameObject avatar)
+        {
+            if (capturyOrigin != null)
+            {
+                avatar.transform.SetParent(capturyOrigin.transform);
+            }
+        }
+
+        /// <summary>
+        /// Sets the coordinate system of all existing avatars to CapturyOrigin, if existent. Otherwise keep world origin.
+        /// </summary>
+        private void SetAvatarsToOrigin()
+        {
+            // Find origin. Null if no origin is found.
+            capturyOrigin = FindObjectOfType<CapturyOrigin>();
+            if (capturyOrigin != null)
+            {
+                networkPlugin.SetCapturyOrigin(capturyOrigin);
+                foreach (GameObject avatar in avatars)
+                {
+                    avatar.transform.SetParent(capturyOrigin.transform);
+                }
             }
         }
 
@@ -305,6 +359,22 @@ namespace Captury
             {
                 Debug.LogError("No Captury config file found at " + CAPTURY_CONFIG_FILE_PATH);
             }
+        }
+
+        /// <summary>
+        /// Called when scene has changed/switched.
+        /// </summary>
+        /// <param name="previousScene"></param>
+        /// <param name="currentScene"></param>
+        private void OnActiveSceneChanged(Scene previousScene, Scene currentScene)
+        {
+            if (capturyOrigin != null)
+            {
+                capturyOrigin.RemoveOrigin();
+                capturyOrigin = null;
+            }
+
+            SetAvatarsToOrigin();
         }
     }
 }

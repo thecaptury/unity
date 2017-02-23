@@ -233,6 +233,9 @@ namespace Captury
 		
 		public CapturyARTag[] arTags = new CapturyARTag[0];
 
+        // coordinate system origin for all avatars
+        private CapturyOrigin capturyOrigin;
+
         private string headJointName = "Head";
 
         // threading data for communication with server
@@ -318,6 +321,14 @@ namespace Captury
 					// now loop over all joints
 					Vector3 pos = new Vector3();
 					Vector3 rot = new Vector3();
+                    
+                    // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
+                    Vector3 offsetToOrigin = Vector3.zero;
+                    if (capturyOrigin != null)
+                    {
+                        offsetToOrigin = capturyOrigin.GetOffsetToWorldOrigin();
+                    }
+
 					for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
 					{
 						// ignore any joints that do not map to a transform
@@ -329,7 +340,7 @@ namespace Captury
 						pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
 						rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
 
-						skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos);
+                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToOrigin;
 						skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
 					}
 
@@ -617,6 +628,15 @@ namespace Captury
             Marshal.StructureToPtr(euler, rotation, false);
             Captury_setRotationConstraint(id, index, rotation, Captury_getTime(), 1.0f);
             Marshal.FreeHGlobal(rotation);
+        }
+
+        /// <summary>
+        /// Sets a new <see cref="CapturyOrigin"/>.
+        /// </summary>
+        /// <param name="newCapturyOrigin"></param>
+        public void SetCapturyOrigin(CapturyOrigin newCapturyOrigin)
+        {
+            capturyOrigin = newCapturyOrigin;
         }
 
         //===============================================
