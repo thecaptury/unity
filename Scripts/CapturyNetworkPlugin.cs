@@ -233,6 +233,7 @@ namespace Captury
 		
 		public CapturyARTag[] arTags = new CapturyARTag[0];
 
+        private CapturyOriginManager capturyOriginManager;
         // coordinate system origin for all avatars
         private CapturyOrigin capturyOrigin;
 
@@ -246,6 +247,7 @@ namespace Captury
         // internal variables
         private bool isConnected = false;
         private bool isSetup = false;
+        private bool receivedFirstCameras = false;
 
         // skeleton data from Captury
         private Dictionary<int, IntPtr> actorPointers = new Dictionary<int, IntPtr>();
@@ -253,6 +255,13 @@ namespace Captury
         private Dictionary<int, CapturySkeleton> skeletons = new Dictionary<int, CapturySkeleton>();
         private Dictionary<int, CapturyMarkerTransform> headTransforms = new Dictionary<int, CapturyMarkerTransform>();
         private Dictionary<string, int> jointsWithConstraints = new Dictionary<string, int>();
+
+        void Awake()
+        {
+            // asign to CapturyOrigin change 
+            capturyOriginManager = GetComponent<CapturyOriginManager>();
+            capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
+        }
 
         //=============================
         // this is run once at startup
@@ -430,8 +439,10 @@ namespace Captury
                             cameraOrientations[i] = ConvertRotation(new Vector3(camera.orientationX, camera.orientationY, camera.orientationZ));
                         }
                         // Fire cameras changed event
-						if (CamerasChanged != null)
-							CamerasChanged(cameraPositions, cameraOrientations);
+                        if (CamerasChanged != null)
+                        {
+                            CamerasChanged(cameraPositions, cameraOrientations);
+                        }
                     }
                 }
                 if (isSetup)
@@ -631,12 +642,12 @@ namespace Captury
         }
 
         /// <summary>
-        /// Sets a new <see cref="CapturyOrigin"/>.
+        /// Called when <see cref="CapturyOrigin"/> changes and sets it as global variable.
         /// </summary>
         /// <param name="newCapturyOrigin"></param>
-        public void SetCapturyOrigin(CapturyOrigin newCapturyOrigin)
+        public void OnCapturyOriginChanged(CapturyOrigin capturyOrigin)
         {
-            capturyOrigin = newCapturyOrigin;
+            this.capturyOrigin = capturyOrigin;
         }
 
         //===============================================

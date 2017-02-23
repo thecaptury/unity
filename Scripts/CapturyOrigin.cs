@@ -9,12 +9,6 @@ namespace Captury
     /// </summary>
     public class CapturyOrigin : MonoBehaviour
     {
-        public void Start()
-        {
-            // keeps the origin through scene change. necessary to not lose avatars
-            DontDestroyOnLoad(gameObject);
-        }
-
         /// <summary>
         /// Gets the offset to world origin.
         /// </summary>
@@ -22,15 +16,6 @@ namespace Captury
         public Vector3 GetOffsetToWorldOrigin()
         {
             return transform.position;
-        }
-
-        /// <summary>
-        /// Removes the origin but keeps the avatars and puts them under root.
-        /// </summary>
-        public void RemoveOrigin()
-        {
-            transform.DetachChildren();
-            DestroyImmediate(gameObject);
         }
     }
 }
