@@ -10,7 +10,10 @@ namespace Captury
     /// </summary>
     public class CapturyOriginManager : MonoBehaviour
     {
-        // Events
+        /// <summary>
+        /// Event which is called when <see cref="CapturyOrigin"/> changes 
+        /// </summary>
+        /// <param name="capturyOrigin"></param>
         public delegate void CapturyOriginDelegate(CapturyOrigin capturyOrigin);
         public event CapturyOriginDelegate CapturyOriginChanged;
 

@@ -264,7 +264,7 @@ namespace Captury
 
         void Awake()
         {
-            // asign to CapturyOrigin change 
+            // register to CapturyOrigin change event
             capturyOriginManager = GetComponent<CapturyOriginManager>();
             capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
         }
