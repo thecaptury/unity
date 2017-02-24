@@ -85,8 +85,8 @@ namespace Captury
             DontDestroyOnLoad(gameObject);
 
             // register for skeleton events
-            networkPlugin.foundSkeleton += FoundSkeleton;
-            networkPlugin.lostSkeleton += LostSkeleton;
+            networkPlugin.foundSkeleton += OnFoundSkeleton;
+            networkPlugin.lostSkeleton += OnLostSkeleton;
             // register for AR Tag (marker) events
             networkPlugin.detectedARTags += OnDetectedARTags;
         }
@@ -96,8 +96,8 @@ namespace Captury
             // unregister from events
             if (networkPlugin != null)
             {
-                networkPlugin.foundSkeleton -= FoundSkeleton;
-                networkPlugin.lostSkeleton -= LostSkeleton;
+                networkPlugin.foundSkeleton -= OnFoundSkeleton;
+                networkPlugin.lostSkeleton -= OnLostSkeleton;
                 networkPlugin.detectedARTags -= OnDetectedARTags;
             }
         }
@@ -120,7 +120,7 @@ namespace Captury
         /// Called when a new captury skeleton is found
         /// </summary>
         /// <param name="skeleton"></param>
-        void FoundSkeleton(CapturySkeleton skeleton)
+        void OnFoundSkeleton(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
@@ -133,7 +133,7 @@ namespace Captury
         /// Called when a captury skeleton is lost
         /// </summary>
         /// <param name="skeleton"></param>
-        void LostSkeleton(CapturySkeleton skeleton)
+        void OnLostSkeleton(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager lost skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (lostSkeletons)
