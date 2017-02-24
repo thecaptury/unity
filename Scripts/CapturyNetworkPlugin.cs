@@ -165,6 +165,7 @@ namespace Captury
     //====================
     // the network plugin
     //====================
+    [RequireComponent(typeof(CapturyOriginManager))]
     public class CapturyNetworkPlugin : MonoBehaviour
     {
         //=============================================
@@ -233,6 +234,16 @@ namespace Captury
 		
 		public CapturyARTag[] arTags = new CapturyARTag[0];
 
+        /// <summary>
+        /// Reference to <see cref="capturyOriginManager"/> which handles the origin of the coordinate system
+        /// </summary>
+        private CapturyOriginManager capturyOriginManager;
+
+        /// <summary>
+        /// Reference to the current <see cref="CapturyOrigin"/> in the scene which defines the origin of the coordinate system of all avatars 
+        /// </summary>
+        private CapturyOrigin capturyOrigin;
+
         private string headJointName = "Head";
 
         // threading data for communication with server
@@ -250,6 +261,13 @@ namespace Captury
         private Dictionary<int, CapturySkeleton> skeletons = new Dictionary<int, CapturySkeleton>();
         private Dictionary<int, CapturyMarkerTransform> headTransforms = new Dictionary<int, CapturyMarkerTransform>();
         private Dictionary<string, int> jointsWithConstraints = new Dictionary<string, int>();
+
+        void Awake()
+        {
+            // register to CapturyOrigin change event
+            capturyOriginManager = GetComponent<CapturyOriginManager>();
+            capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
+        }
 
         //=============================
         // this is run once at startup
@@ -318,6 +336,14 @@ namespace Captury
 					// now loop over all joints
 					Vector3 pos = new Vector3();
 					Vector3 rot = new Vector3();
+                    
+                    // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
+                    Vector3 offsetToOrigin = Vector3.zero;
+                    if (capturyOrigin != null)
+                    {
+                        offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
+                    }
+
 					for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
 					{
 						// ignore any joints that do not map to a transform
@@ -329,7 +355,7 @@ namespace Captury
 						pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
 						rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
 
-						skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos);
+                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToOrigin;
 						skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
 					}
 
@@ -419,8 +445,10 @@ namespace Captury
                             cameraOrientations[i] = ConvertRotation(new Vector3(camera.orientationX, camera.orientationY, camera.orientationZ));
                         }
                         // Fire cameras changed event
-						if (CamerasChanged != null)
-							CamerasChanged(cameraPositions, cameraOrientations);
+                        if (CamerasChanged != null)
+                        {
+                            CamerasChanged(cameraPositions, cameraOrientations);
+                        }
                     }
                 }
                 if (isSetup)
@@ -617,6 +645,15 @@ namespace Captury
             Marshal.StructureToPtr(euler, rotation, false);
             Captury_setRotationConstraint(id, index, rotation, Captury_getTime(), 1.0f);
             Marshal.FreeHGlobal(rotation);
+        }
+
+        /// <summary>
+        /// Called when <see cref="CapturyOrigin"/> changes and sets it as local variable.
+        /// </summary>
+        /// <param name="newCapturyOrigin"></param>
+        public void OnCapturyOriginChanged(CapturyOrigin capturyOrigin)
+        {
+            this.capturyOrigin = capturyOrigin;
         }
 
         //===============================================
