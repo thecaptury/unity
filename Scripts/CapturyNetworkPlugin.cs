@@ -120,6 +120,7 @@ namespace Captury
     {
         public string name;
         public int id;
+        public int playerID = -1;
         public CapturySkeletonJoint[] joints;
 
         private GameObject reference;
