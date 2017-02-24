@@ -392,8 +392,6 @@ namespace Captury
 				else
 					Array.Resize(ref arTags, 0);
 
-				Debug.Log("found artags: " + num);
-
 				Captury_freeARTags(arTagData);
 			}
 
