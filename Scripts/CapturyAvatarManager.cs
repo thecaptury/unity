@@ -18,10 +18,9 @@ namespace Captury
         [Tooltip("If true, first found skeleton will be assigned to local player")]
         private bool assignFirstSkeleton;
 
-        /// <summary>
-        /// The OVRCameraRig which will be manipulated by the captury tracking
-        /// </summary>
-        private OVRCameraRig ovrCameraRig;
+        [SerializeField]
+        [Tooltip("The TransformFollower which will be manipulated by the captury tracking (should be on a parent GameObject of the camera).")]
+        private TransformFollower transformFollower;
 
         /// <summary>
         /// The <see cref="CapturyNetworkPlugin"/> which handles the connection to the captuy server
@@ -75,10 +74,13 @@ namespace Captury
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
             capturyLeapIntegration = GetComponent<CapturyLeapIntegration>();
 
-            ovrCameraRig = FindObjectOfType<OVRCameraRig>();
-            if (ovrCameraRig == null)
+            if (transformFollower == null)
             {
-                Debug.LogError("No OVRCameraRig found. Make sure there's one in the Scene.");
+                transformFollower = FindObjectOfType<TransformFollower>();
+                if(transformFollower == null)
+                {
+                    Debug.LogError("No TransformFollower found in Scene. Camera manipulation by Captury tracking won't work.");
+                }
             }
 
             // keep the CapturyAvatarManager GameObject between scenes
@@ -262,9 +264,7 @@ namespace Captury
             Debug.Log("Assigned local player to skeleton with name " + skeleton.name + " and id " + skeleton.id);
             if (head != null)
             {
-                ovrCameraRig.trackingSpace.parent = head;
-                ovrCameraRig.trackingSpace.localPosition = Vector3.zero;
-                ovrCameraRig.trackingSpace.localRotation = Quaternion.Euler(0, 180, 0);
+                transformFollower.Target = head;
             }
             else
             {
@@ -279,7 +279,7 @@ namespace Captury
         private void ClearPlayerAssignment()
         {
             capturyLeapIntegration.setTargetModel(null, null, -1);
-            ovrCameraRig.trackingSpace.parent = null;
+            transformFollower.Target = null;
         }
 
         /// <summary>
