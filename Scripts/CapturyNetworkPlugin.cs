@@ -254,7 +254,6 @@ namespace Captury
         // internal variables
         private bool isConnected = false;
         private bool isSetup = false;
-        private bool receivedFirstCameras = false;
 
         // skeleton data from Captury
         private Dictionary<int, IntPtr> actorPointers = new Dictionary<int, IntPtr>();
