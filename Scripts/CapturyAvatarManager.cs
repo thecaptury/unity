@@ -87,15 +87,18 @@ namespace Captury
             // register for skeleton events
             networkPlugin.foundSkeleton += FoundSkeleton;
             networkPlugin.lostSkeleton += LostSkeleton;
+            // register for AR Tag (marker) events
+            networkPlugin.detectedARTags += OnDetectedARTags;
         }
 
         void OnDestroy()
         {
-            // unregister delegates
+            // unregister from events
             if (networkPlugin != null)
             {
                 networkPlugin.foundSkeleton -= FoundSkeleton;
                 networkPlugin.lostSkeleton -= LostSkeleton;
+                networkPlugin.detectedARTags -= OnDetectedARTags;
             }
         }
 
@@ -142,6 +145,15 @@ namespace Captury
             {
                 ClearPlayerAssignment();
             }
+        }
+
+        /// <summary>
+        /// Called when one or more captury AR Tags are detected
+        /// </summary>
+        /// <param name="skeleton"></param>
+        void OnDetectedARTags(CapturyARTag[] arTags)
+        {
+            Debug.Log("Detected " + arTags.Length + " AR Tags");
         }
 
         /// <summary>
