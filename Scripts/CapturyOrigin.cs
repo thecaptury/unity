@@ -9,6 +9,9 @@ namespace Captury
     /// </summary>
     public class CapturyOrigin : MonoBehaviour
     {
+        /// <summary>
+        /// Offset between this CapturyOrigin and the world origin (0,0,0)
+        /// </summary>
         public Vector3 OffsetToWorldOrigin
         {
             get
