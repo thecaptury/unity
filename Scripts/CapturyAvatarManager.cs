@@ -18,10 +18,9 @@ namespace Captury
         [Tooltip("If true, first found skeleton will be assigned to local player")]
         private bool assignFirstSkeleton;
 
-        /// <summary>
-        /// The OVRCameraRig which will be manipulated by the captury tracking
-        /// </summary>
-        private OVRCameraRig ovrCameraRig;
+        [SerializeField]
+        [Tooltip("The TransformFollower which will be manipulated by the captury tracking (should be on a parent GameObject of the camera).")]
+        private TransformFollower transformFollower;
 
         /// <summary>
         /// The <see cref="CapturyNetworkPlugin"/> which handles the connection to the captuy server
@@ -75,27 +74,33 @@ namespace Captury
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
             capturyLeapIntegration = GetComponent<CapturyLeapIntegration>();
 
-            ovrCameraRig = FindObjectOfType<OVRCameraRig>();
-            if (ovrCameraRig == null)
+            if (transformFollower == null)
             {
-                Debug.LogError("No OVRCameraRig found. Make sure there's one in the Scene.");
+                transformFollower = FindObjectOfType<TransformFollower>();
+                if(transformFollower == null)
+                {
+                    Debug.LogError("No TransformFollower found in Scene. Camera manipulation by Captury tracking won't work.");
+                }
             }
 
             // keep the CapturyAvatarManager GameObject between scenes
             DontDestroyOnLoad(gameObject);
 
             // register for skeleton events
-            networkPlugin.foundSkeleton += FoundSkeleton;
-            networkPlugin.lostSkeleton += LostSkeleton;
+            networkPlugin.foundSkeleton += OnFoundSkeleton;
+            networkPlugin.lostSkeleton += OnLostSkeleton;
+            // register for AR Tag (marker) events
+            networkPlugin.detectedARTags += OnDetectedARTags;
         }
 
         void OnDestroy()
         {
-            // unregister delegates
+            // unregister from events
             if (networkPlugin != null)
             {
-                networkPlugin.foundSkeleton -= FoundSkeleton;
-                networkPlugin.lostSkeleton -= LostSkeleton;
+                networkPlugin.foundSkeleton -= OnFoundSkeleton;
+                networkPlugin.lostSkeleton -= OnLostSkeleton;
+                networkPlugin.detectedARTags -= OnDetectedARTags;
             }
         }
 
@@ -117,7 +122,7 @@ namespace Captury
         /// Called when a new captury skeleton is found
         /// </summary>
         /// <param name="skeleton"></param>
-        void FoundSkeleton(CapturySkeleton skeleton)
+        void OnFoundSkeleton(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
@@ -130,7 +135,7 @@ namespace Captury
         /// Called when a captury skeleton is lost
         /// </summary>
         /// <param name="skeleton"></param>
-        void LostSkeleton(CapturySkeleton skeleton)
+        void OnLostSkeleton(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager lost skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (lostSkeletons)
@@ -142,6 +147,15 @@ namespace Captury
             {
                 ClearPlayerAssignment();
             }
+        }
+
+        /// <summary>
+        /// Called when one or more captury AR Tags are detected
+        /// </summary>
+        /// <param name="skeleton"></param>
+        void OnDetectedARTags(CapturyARTag[] arTags)
+        {
+            Debug.Log("Detected " + arTags.Length + " AR Tags");
         }
 
         /// <summary>
@@ -250,9 +264,7 @@ namespace Captury
             Debug.Log("Assigned local player to skeleton with name " + skeleton.name + " and id " + skeleton.id);
             if (head != null)
             {
-                ovrCameraRig.trackingSpace.parent = head;
-                ovrCameraRig.trackingSpace.localPosition = Vector3.zero;
-                ovrCameraRig.trackingSpace.localRotation = Quaternion.Euler(0, 180, 0);
+                transformFollower.Target = head;
             }
             else
             {
@@ -267,7 +279,7 @@ namespace Captury
         private void ClearPlayerAssignment()
         {
             capturyLeapIntegration.setTargetModel(null, null, -1);
-            ovrCameraRig.trackingSpace.parent = null;
+            transformFollower.Target = null;
         }
 
         /// <summary>
