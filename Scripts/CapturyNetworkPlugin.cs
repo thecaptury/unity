@@ -165,6 +165,7 @@ namespace Captury
     //====================
     // the network plugin
     //====================
+    [RequireComponent(typeof(CapturyOriginManager))]
     public class CapturyNetworkPlugin : MonoBehaviour
     {
         //=============================================
@@ -233,8 +234,14 @@ namespace Captury
 		
 		public CapturyARTag[] arTags = new CapturyARTag[0];
 
+        /// <summary>
+        /// Reference to <see cref="capturyOriginManager"/> which handles the origin of the coordinate system
+        /// </summary>
         private CapturyOriginManager capturyOriginManager;
-        // coordinate system origin for all avatars
+
+        /// <summary>
+        /// Reference to the current <see cref="CapturyOrigin"/> in the scene which defines the origin of the coordinate system of all avatars 
+        /// </summary>
         private CapturyOrigin capturyOrigin;
 
         private string headJointName = "Head";
@@ -335,7 +342,7 @@ namespace Captury
                     Vector3 offsetToOrigin = Vector3.zero;
                     if (capturyOrigin != null)
                     {
-                        offsetToOrigin = capturyOrigin.GetOffsetToWorldOrigin();
+                        offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
                     }
 
 					for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
@@ -642,7 +649,7 @@ namespace Captury
         }
 
         /// <summary>
-        /// Called when <see cref="CapturyOrigin"/> changes and sets it as global variable.
+        /// Called when <see cref="CapturyOrigin"/> changes and sets it as local variable.
         /// </summary>
         /// <param name="newCapturyOrigin"></param>
         public void OnCapturyOriginChanged(CapturyOrigin capturyOrigin)

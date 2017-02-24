@@ -69,8 +69,6 @@ namespace Captury
         private const string AVATAR_RIGHT_HAND_TRANSFORM_NAME = "RightFingerBase";
         private const string AVATAR_HEAD_TRANSFORM_NAME = "Head";
 
-
-
         void Start()
         {
             LoadConfig();
@@ -124,7 +122,6 @@ namespace Captury
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
             {
-                Debug.Log("Found Skeletons");
                 newSkeletons.Add(skeleton);
             }
         }

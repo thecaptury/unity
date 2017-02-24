@@ -5,6 +5,9 @@ using UnityEngine.SceneManagement;
 
 namespace Captury
 {
+    /// <summary>
+    /// Manages the <see cref="CapturyOrigin"/> whithin a scene which defines the origin of the coordinate system of all avatars 
+    /// </summary>
     public class CapturyOriginManager : MonoBehaviour
     {
         // Events
@@ -23,7 +26,7 @@ namespace Captury
             capturyOrigin = FindObjectOfType<CapturyOrigin>();
             if (capturyOrigin == null)
             {
-                // create origin at world origin of none exists
+                // create origin at world origin if none exists
                 capturyOrigin = CreateCapturyOrigin();
             }
             CapturyOriginChanged(capturyOrigin);

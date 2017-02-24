@@ -9,13 +9,12 @@ namespace Captury
     /// </summary>
     public class CapturyOrigin : MonoBehaviour
     {
-        /// <summary>
-        /// Gets the offset to world origin.
-        /// </summary>
-        /// <returns></returns>
-        public Vector3 GetOffsetToWorldOrigin()
+        public Vector3 OffsetToWorldOrigin
         {
-            return transform.position;
+            get
+            {
+                return transform.position;
+            }
         }
     }
 }
