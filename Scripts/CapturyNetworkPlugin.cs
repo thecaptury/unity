@@ -221,14 +221,13 @@ namespace Captury
 		public bool streamARTags = false;
 
         // Events
-        public delegate void FoundSkeletonDelegate(CapturySkeleton skeleton);
-        public event FoundSkeletonDelegate foundSkeleton;
-        public delegate void LostSkeletonDelegate(CapturySkeleton skeleton);
-        public event LostSkeletonDelegate lostSkeleton;
+        public delegate void SkeletonDelegate(CapturySkeleton skeleton);
+        public event SkeletonDelegate SkeletonFound;
+        public event SkeletonDelegate SkeletonLost;
         public delegate void CamerasChangedDelegate(Vector3[] positions, Quaternion[] rotations);
         public event CamerasChangedDelegate CamerasChanged;
-        public delegate void DetectedARTagsDelegate(CapturyARTag[] artags);
-        public event DetectedARTagsDelegate detectedARTags;
+        public delegate void ARTagsDetectedDelegate(CapturyARTag[] artags);
+        public event ARTagsDetectedDelegate ARTagsDetected;
 
         public Vector3[] cameraPositions;
         public Quaternion[] cameraOrientations;
@@ -388,8 +387,8 @@ namespace Captury
 					arTags[num] = arTag;
 					at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
 				}
-				if (num != 0 && detectedARTags != null)
-					detectedARTags(arTags);
+				if (num != 0 && ARTagsDetected != null)
+					ARTagsDetected(arTags);
 				else
 					Array.Resize(ref arTags, 0);
 
@@ -481,9 +480,9 @@ namespace Captury
                             CapturySkeleton skeleton = new CapturySkeleton();
                             ConvertActor(actor, ref skeleton);
 
-                            if (foundSkeleton != null)
+                            if (SkeletonFound != null)
                             {
-                                foundSkeleton(skeleton);
+                                SkeletonFound(skeleton);
                             }
 
                             //  and add it to the list of actors we are processing, making sure this is secured by the mutex
@@ -519,10 +518,10 @@ namespace Captury
                 {
                     if (kvp.Value <= 0)
                     {
-                        if (lostSkeleton != null)
+                        if (SkeletonLost != null)
                         {
                             Debug.Log("lost skeleton. telling all my friends.");
-                            lostSkeleton(skeletons[kvp.Key]);
+                            SkeletonLost(skeletons[kvp.Key]);
                         }
 
                         // remove actor

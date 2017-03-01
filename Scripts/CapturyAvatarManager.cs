@@ -105,10 +105,10 @@ namespace Captury
             DontDestroyOnLoad(gameObject);
 
             // register for skeleton events
-            networkPlugin.foundSkeleton += OnFoundSkeleton;
-            networkPlugin.lostSkeleton += OnLostSkeleton;
+            networkPlugin.SkeletonFound += OnSkeletonFound;
+            networkPlugin.SkeletonLost += OnSkeletonLost;
             // register for AR Tag (marker) events
-            networkPlugin.detectedARTags += OnDetectedARTags;
+            networkPlugin.ARTagsDetected += OnARTagsDetected;
         }
 
         private void OnDestroy()
@@ -116,9 +116,9 @@ namespace Captury
             // unregister from events
             if (networkPlugin != null)
             {
-                networkPlugin.foundSkeleton -= OnFoundSkeleton;
-                networkPlugin.lostSkeleton -= OnLostSkeleton;
-                networkPlugin.detectedARTags -= OnDetectedARTags;
+                networkPlugin.SkeletonFound -= OnSkeletonFound;
+                networkPlugin.SkeletonLost -= OnSkeletonLost;
+                networkPlugin.ARTagsDetected -= OnARTagsDetected;
             }
         }
 
@@ -166,10 +166,10 @@ namespace Captury
         }
 
         /// <summary>
-        /// Called when one or more captury AR Tags are detected
+        /// Called when a Captury AR tags (markers) are detected
         /// </summary>
-        /// <param name="skeleton"></param>
-        void OnDetectedARTags(CapturyARTag[] arTags)
+        /// <param name="tags"></param>
+        private void OnARTagsDetected(CapturyARTag[] tags)
         {
             foreach(var tag in arTags)
             {
