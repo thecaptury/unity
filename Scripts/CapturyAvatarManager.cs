@@ -302,10 +302,13 @@ namespace Captury
             Vector3 tP = new Vector3(tag.ox, tag.oy, tag.oz);
             foreach(var joint in skel.joints)
             {
-                // TODO check if local / global position
-                if(Vector3.Distance(tP, joint.transform.position) < threshold)
+                if(joint != null && joint.transform != null)
                 {
-                    return true;
+                    // TODO check if local / global position
+                    if (Vector3.Distance(tP, joint.transform.position) < threshold)
+                    {
+                        return true;
+                    }
                 }
             }
             return false;
