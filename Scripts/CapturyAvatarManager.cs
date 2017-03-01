@@ -24,10 +24,6 @@ namespace Captury
         private GameObject defaultAvatar;
 
         [SerializeField]
-        [Tooltip("If true, first found skeleton will be assigned to local player")]
-        private bool assignFirstSkeleton;
-
-        [SerializeField]
         [Tooltip("The TransformFollower which will be manipulated by the captury tracking (should be on a parent GameObject of the camera).")]
         private TransformFollower transformFollower;
 
