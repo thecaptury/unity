@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 namespace Captury
@@ -11,12 +12,16 @@ namespace Captury
     public class CapturyAvatarManager : MonoBehaviour
     {
         [SerializeField]
-        [Tooltip("Avatar template which will be instantiated for each tracked Captury Avatar")]
-        private GameObject avatarTemplateObject;
+        [Tooltip("Avatar prefabs for local players (without head). userAvatarID is set in " + CAPTURY_CONFIG_FILE_PATH)]
+        private GameObject[] localAvatarPrefabs = new GameObject[] { };
 
         [SerializeField]
-        [Tooltip("If true, first found skeleton will be assigned to local player")]
-        private bool assignFirstSkeleton;
+        [Tooltip("Avatar prefabs for remote players (with head). userAvatarID is set in " + CAPTURY_CONFIG_FILE_PATH)]
+        private GameObject[] remoteAvatarPrefabs = new GameObject[] { };
+
+        [SerializeField]
+        [Tooltip("The default avatar prefab which will be instantiated if no user is assigned to a skeleton.")]
+        private GameObject defaultAvatar;
 
         [SerializeField]
         [Tooltip("The TransformFollower which will be manipulated by the captury tracking (should be on a parent GameObject of the camera).")]
@@ -46,20 +51,20 @@ namespace Captury
         private List<CapturySkeleton> trackedSkeletons = new List<CapturySkeleton>();
 
         /// <summary>
-        /// True if local player is assigned to a Captury avatar
+        /// The <see cref="CapturySkeleton"/> which is assigned to the local player.
+        /// null if local player is not assigned to a skeleton yet.
         /// </summary>
-        private bool isPlayerAssigned = false;
+        private CapturySkeleton playerSkeleton;
 
         /// <summary>
-        /// The local player id which will be read from capturyconfig.json
-        /// The avatar with this marker id will be automatically assigned to the local player
+        /// The captury config will be loaded from <see cref="CAPTURY_CONFIG_FILE_PATH"/>
         /// </summary>
-        private int localPlayerID = -9999;
+        private CapturyConfig capturyConfig;
 
         /// <summary>
         /// Path of the captury config file
         /// </summary>
-        private const string CAPTURY_CONFIG_FILE_PATH = "./capturyconfig.txt";
+        private const string CAPTURY_CONFIG_FILE_PATH = "capturyconfig.json";
 
         /// <summary>
         /// Avatar transform names, to find the right transforms of an instantiated avatar.
@@ -68,7 +73,29 @@ namespace Captury
         private const string AVATAR_RIGHT_HAND_TRANSFORM_NAME = "RightFingerBase";
         private const string AVATAR_HEAD_TRANSFORM_NAME = "Head";
 
-        void Start()
+        /// <summary>
+        /// Player Assignment Changed is fired when the assignement of the local player with a skeleton changed
+        /// skeleton is null if the assignment was cleared
+        /// </summary>
+        /// <param name="skeleton"></param>
+        public delegate void PlayerAssignmentChangedDelegate(int skeletonID, bool isAssigned);
+        public event PlayerAssignmentChangedDelegate PlayerAssignmentChanged;
+
+        /// <summary>
+        /// Can be called from a multiplayer manager to set the skeletons playerID
+        /// </summary>
+        /// <param name="skeletonID">Captury Skeleton id</param>
+        /// <param name="playerID">Networking Player id</param>
+        public void SetSkeletonPlayerID(int skeletonID, int playerID)
+        {
+            CapturySkeleton skel = trackedSkeletons.First(s => s.id == skeletonID);
+            if (skel != null)
+            {
+                skel.playerID = playerID;
+            }
+        }
+
+        private void Start()
         {
             LoadConfig();
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
@@ -83,46 +110,54 @@ namespace Captury
                 }
             }
 
+            // check the avatar prefabs
+            if(defaultAvatar == null)
+            {
+                Debug.LogError("defaultAvatar not set. Make sure you assign a Avatar prefab to CapturyAvatarManager.defaultAvatar");
+            }
+            if (localAvatarPrefabs.Length != remoteAvatarPrefabs.Length)
+            {
+                Debug.LogError("localAvatarPrefabs.Length != remoteAvatarPrefabs.Length. For every localAvatarPrefab (without head) there has to be a remoteAvatarPrefab (with head) which will be spawned on remote experiences");
+            }
+
             // keep the CapturyAvatarManager GameObject between scenes
             DontDestroyOnLoad(gameObject);
 
             // register for skeleton events
-            networkPlugin.foundSkeleton += OnFoundSkeleton;
-            networkPlugin.lostSkeleton += OnLostSkeleton;
+            networkPlugin.SkeletonFound += OnSkeletonFound;
+            networkPlugin.SkeletonLost += OnSkeletonLost;
             // register for AR Tag (marker) events
-            networkPlugin.detectedARTags += OnDetectedARTags;
+            networkPlugin.ARTagsDetected += OnARTagsDetected;
         }
 
-        void OnDestroy()
+        private void OnDestroy()
         {
             // unregister from events
             if (networkPlugin != null)
             {
-                networkPlugin.foundSkeleton -= OnFoundSkeleton;
-                networkPlugin.lostSkeleton -= OnLostSkeleton;
-                networkPlugin.detectedARTags -= OnDetectedARTags;
+                networkPlugin.SkeletonFound -= OnSkeletonFound;
+                networkPlugin.SkeletonLost -= OnSkeletonLost;
+                networkPlugin.ARTagsDetected -= OnARTagsDetected;
             }
         }
 
-        void Update()
+        private void Update()
         {
             lock (newSkeletons)
             {
-                InstantiateAvatars(newSkeletons);
+                InstantiateDefaultAvatars(newSkeletons);
             }
             lock (lostSkeletons)
             {
                 DestroyAvatars(lostSkeletons);
             }
-
-            CheckPlayerSkeletonAssignment();
         }
 
         /// <summary>
         /// Called when a new captury skeleton is found
         /// </summary>
         /// <param name="skeleton"></param>
-        void OnFoundSkeleton(CapturySkeleton skeleton)
+        private void OnSkeletonFound(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
@@ -135,7 +170,7 @@ namespace Captury
         /// Called when a captury skeleton is lost
         /// </summary>
         /// <param name="skeleton"></param>
-        void OnLostSkeleton(CapturySkeleton skeleton)
+        private void OnSkeletonLost(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager lost skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (lostSkeletons)
@@ -143,36 +178,96 @@ namespace Captury
                 lostSkeletons.Add(skeleton);
             }
             // clear the assignment between local player and the skelton if it's lost
-            if (isPlayerAssigned && IsLocalPlayer(skeleton))
+            if (IsLocalPlayer(skeleton))
             {
                 ClearPlayerAssignment();
             }
         }
 
         /// <summary>
-        /// Called when one or more captury AR Tags are detected
+        /// Called when a Captury AR tags (markers) are detected
         /// </summary>
-        /// <param name="skeleton"></param>
-        void OnDetectedARTags(CapturyARTag[] arTags)
+        /// <param name="tags"></param>
+        private void OnARTagsDetected(CapturyARTag[] tags)
         {
-            Debug.Log("Detected " + arTags.Length + " AR Tags");
+            // check player/skeleton assignment with AR tags
+            if (playerSkeleton == null)
+            {
+                // get the AR tags which are assigned to the player 
+                List<CapturyARTag> playerARTags = tags.Where(t => capturyConfig.arTagIDs.Contains(t.id)).ToList();
+                foreach (var tag in playerARTags)
+                {
+                    CapturySkeleton skel = GetAttachedSkeleton(tag);
+                    if (skel != null)
+                    {
+                        if (skel.playerID == -1)
+                        {
+                            AssignPlayerToSkeleton(skel);
+                        }
+                        else
+                        {
+                            Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
-        /// Instantiates the avatars for the given list of skeletons
+        /// Returns the avatar prefab with the given avatarID from <see cref="localAvatarPrefabs"/> or <see cref="remoteAvatarPrefabs"/> depending on isLocal.
+        /// If avatarID is invalid, <see cref="defaultAvatar"/> will be returned
+        /// </summary>
+        /// <param name="avatarID"></param>
+        /// <param name="isLocal"></param>
+        /// <returns>Avatar prefab</returns>
+        private GameObject GetAvatarPrefab(int avatarID, bool isLocal)
+        {
+            GameObject[] avatars;
+            if (isLocal)
+            {
+                avatars = localAvatarPrefabs;
+            } else
+            {
+                avatars = remoteAvatarPrefabs;
+            }
+            if (avatarID < 0 || avatarID > avatars.Length)
+            {
+                Debug.LogError("Trying to get avatar for invalid id " + avatarID + ". returning defaultAvatar!");
+                return defaultAvatar;
+            }
+            return avatars[avatarID];
+        }
+
+        /// <summary>
+        /// Instantiates and sets the given avatarPrefab for the CapturySkeleton
+        /// </summary>
+        /// <param name="skel"></param>
+        /// <param name="avatarPrefab"></param>
+        private void SetAvatar(CapturySkeleton skel, GameObject avatarPrefab)
+        {
+            GameObject avatar = Instantiate(avatarPrefab);
+            DontDestroyOnLoad(avatar);
+            avatar.SetActive(true);
+            if(skel.mesh != null)
+            {
+                // destory old avatar
+                DestroyImmediate(skel.mesh);
+            }
+            skel.mesh = avatar;
+        }
+
+        /// <summary>
+        /// Instantiates default avatars for the given list of skeletons
         /// </summary>
         /// <param name="skeletons"></param>
-        private void InstantiateAvatars(List<CapturySkeleton> skeletons)
+        private void InstantiateDefaultAvatars(List<CapturySkeleton> skeletons)
         {
             lock (trackedSkeletons)
             {
                 foreach (CapturySkeleton skel in skeletons)
                 {
                     Debug.Log("Instantiating avatar for skeleton with id " + skel.id + " and name " + skel.name);
-                    GameObject actor = Instantiate(avatarTemplateObject);
-                    DontDestroyOnLoad(actor);
-                    actor.SetActive(true);
-                    skel.mesh = actor;
+                    SetAvatar(skel, defaultAvatar);
                     trackedSkeletons.Add(skel);
                 }
                 skeletons.Clear();
@@ -189,7 +284,7 @@ namespace Captury
                 foreach (CapturySkeleton skel in skeltons)
                 {
                     Debug.Log("Destroying avatar for skeleton with id " + skel.id + " and name " + skel.name);
-                    Destroy(skel.mesh);
+                    DestroyImmediate(skel.mesh);
                     skel.mesh = null;
                     trackedSkeletons.Remove(skel);
                 }
@@ -198,33 +293,45 @@ namespace Captury
         }
 
         /// <summary>
-        /// If the player is not set
+        /// Checks if the <see cref="CapturyARTag"/> is attached to the <see cref="CapturySkeleton"/> by comparing their positions
         /// </summary>
-        private void CheckPlayerSkeletonAssignment()
+        /// <param name="tag"></param>
+        /// <param name="skel"></param>
+        /// <returns></returns>
+        private bool IsAttachedToSkeleton(CapturyARTag tag, CapturySkeleton skel)
         {
-            if (isPlayerAssigned == false)
+            // TODO Nils: Tag attachment logic
+            float threshold = 0.5f;
+            Vector3 tP = new Vector3(tag.ox, tag.oy, tag.oz);
+            foreach(var joint in skel.joints)
             {
-                lock (trackedSkeletons)
+                if(joint != null && joint.transform != null)
                 {
-                    if (assignFirstSkeleton)
+                    // TODO check if local / global position
+                    if (Vector3.Distance(tP, joint.transform.position) < threshold)
                     {
-                        if (trackedSkeletons.Count > 0)
-                        {
-                            AssignPlayerToSkeleton(trackedSkeletons[0]);
-                        }
-                    }
-                    else
-                    {
-                        foreach (CapturySkeleton skel in trackedSkeletons)
-                        {
-                            if (IsLocalPlayer(skel))
-                            {
-                                AssignPlayerToSkeleton(skel);
-                            }
-                        }
+                        return true;
                     }
                 }
             }
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if the given <see cref="CapturyARTag"/> is attached to a <see cref="CapturySkeleton"/> in <see cref="trackedSkeletons"/>
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns>The skeleton which tag is attached to. null if there's none.</returns>
+        private CapturySkeleton GetAttachedSkeleton(CapturyARTag tag)
+        {
+            foreach(var skel in trackedSkeletons)
+            {
+                if (IsAttachedToSkeleton(tag, skel))
+                {
+                    return skel;
+                }
+            }
+            return null;
         }
 
         /// <summary>
@@ -233,6 +340,11 @@ namespace Captury
         /// <param name="skeleton"></param>
         private void AssignPlayerToSkeleton(CapturySkeleton skeleton)
         {
+            // instantiate the local player avatar
+            GameObject avatarPrefab = GetAvatarPrefab(capturyConfig.avatarID, true);
+            SetAvatar(skeleton, avatarPrefab);
+            playerSkeleton = skeleton;
+
             Transform left = null;
             Transform right = null;
             Transform head = null;
@@ -261,7 +373,7 @@ namespace Captury
             {
                 Debug.Log("Cannot find hands on target avatar with name '" + AVATAR_LEFT_HAND_TRANSFORM_NAME + "' and '" + AVATAR_RIGHT_HAND_TRANSFORM_NAME + "'");
             }
-            Debug.Log("Assigned local player to skeleton with name " + skeleton.name + " and id " + skeleton.id);
+
             if (head != null)
             {
                 transformFollower.Target = head;
@@ -270,7 +382,12 @@ namespace Captury
             {
                 Debug.Log("Cannot find head on target avatar with name " + AVATAR_HEAD_TRANSFORM_NAME);
             }
-            isPlayerAssigned = true;
+            
+            if (PlayerAssignmentChanged != null)
+            {
+                PlayerAssignmentChanged(playerSkeleton.id, true);
+            }
+            Debug.Log("Assigned local player to skeleton with name " + skeleton.name + " and id " + skeleton.id);
         }
 
         /// <summary>
@@ -278,8 +395,21 @@ namespace Captury
         /// </summary>
         private void ClearPlayerAssignment()
         {
+            if(playerSkeleton == null)
+            {
+                Debug.LogError("Trying to clear player assignment, but playerSkeleton == null");
+                return;
+            }
+
+            if (PlayerAssignmentChanged != null)
+            {
+                PlayerAssignmentChanged(playerSkeleton.id, false);
+            }
+
+            playerSkeleton.playerID = -1;
             capturyLeapIntegration.setTargetModel(null, null, -1);
             transformFollower.Target = null;
+            playerSkeleton = null;
         }
 
         /// <summary>
@@ -287,9 +417,9 @@ namespace Captury
         /// </summary>
         /// <param name="skeleton"></param>
         /// <returns></returns>
-        bool IsLocalPlayer(CapturySkeleton skeleton)
+        private bool IsLocalPlayer(CapturySkeleton skeleton)
         {
-            return skeleton.id == localPlayerID;
+            return skeleton.Equals(playerSkeleton);
         }
 
         /// <summary>
@@ -302,15 +432,11 @@ namespace Captury
             // read the local player id
             if (File.Exists(CAPTURY_CONFIG_FILE_PATH))
             {
-                string[] configFileLines = File.ReadAllLines(CAPTURY_CONFIG_FILE_PATH);
-                foreach (string line in configFileLines)
+                string json = File.ReadAllText(CAPTURY_CONFIG_FILE_PATH, System.Text.Encoding.ASCII);
+                capturyConfig = JsonUtility.FromJson<CapturyConfig>(json);
+                if(capturyConfig == null)
                 {
-                    if (line.StartsWith("markerID="))
-                    {
-                        int startIndex = "markerID=".Length;
-                        localPlayerID = int.Parse(line.Substring(startIndex));
-                        Debug.Log("localPlayerID = " + localPlayerID);
-                    }
+                    Debug.LogError("Couldn't parse json from " + CAPTURY_CONFIG_FILE_PATH + " to CapturyConfig");
                 }
             }
             else
