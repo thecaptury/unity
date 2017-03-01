@@ -198,13 +198,16 @@ namespace Captury
                 foreach (var tag in playerARTags)
                 {
                     CapturySkeleton skel = GetAttachedSkeleton(tag);
-                    if (skel != null && skel.playerID == -1)
+                    if (skel != null)
                     {
-                        AssignPlayerToSkeleton(skel);
-                    }
-                    else
-                    {
-                        Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                        if (skel.playerID == -1)
+                        {
+                            AssignPlayerToSkeleton(skel);
+                        }
+                        else
+                        {
+                            Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                        }
                     }
                 }
             }
