@@ -62,7 +62,7 @@ namespace Captury
         /// <summary>
         /// The captury config will be loaded from <see cref="CAPTURY_CONFIG_FILE_PATH"/>
         /// </summary>
-        CapturyConfig capturyConfig;
+        private CapturyConfig capturyConfig;
 
         /// <summary>
         /// Path of the captury config file
@@ -111,7 +111,7 @@ namespace Captury
             networkPlugin.detectedARTags += OnDetectedARTags;
         }
 
-        void OnDestroy()
+        private void OnDestroy()
         {
             // unregister from events
             if (networkPlugin != null)
@@ -122,7 +122,7 @@ namespace Captury
             }
         }
 
-        void Update()
+        private void Update()
         {
             lock (newSkeletons)
             {
@@ -138,7 +138,7 @@ namespace Captury
         /// Called when a new captury skeleton is found
         /// </summary>
         /// <param name="skeleton"></param>
-        void OnFoundSkeleton(CapturySkeleton skeleton)
+        private void OnSkeletonFound(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (newSkeletons)
@@ -151,7 +151,7 @@ namespace Captury
         /// Called when a captury skeleton is lost
         /// </summary>
         /// <param name="skeleton"></param>
-        void OnLostSkeleton(CapturySkeleton skeleton)
+        private void OnSkeletonLost(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager lost skeleton with id " + skeleton.id + " and name " + skeleton.name);
             lock (lostSkeletons)
@@ -365,7 +365,7 @@ namespace Captury
         /// </summary>
         /// <param name="skeleton"></param>
         /// <returns></returns>
-        bool IsLocalPlayer(CapturySkeleton skeleton)
+        private bool IsLocalPlayer(CapturySkeleton skeleton)
         {
             return skeleton.Equals(playerSkeleton);
         }
