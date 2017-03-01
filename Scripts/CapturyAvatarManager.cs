@@ -340,6 +340,11 @@ namespace Captury
         /// <param name="skeleton"></param>
         private void AssignPlayerToSkeleton(CapturySkeleton skeleton)
         {
+            // instantiate the local player avatar
+            GameObject avatarPrefab = GetAvatarPrefab(capturyConfig.avatarID, true);
+            SetAvatar(skeleton, avatarPrefab);
+            playerSkeleton = skeleton;
+
             Transform left = null;
             Transform right = null;
             Transform head = null;
@@ -377,11 +382,7 @@ namespace Captury
             {
                 Debug.Log("Cannot find head on target avatar with name " + AVATAR_HEAD_TRANSFORM_NAME);
             }
-
-            // instantiate the local player avatar
-            GameObject avatarPrefab = GetAvatarPrefab(capturyConfig.avatarID, true);
-            SetAvatar(skeleton, avatarPrefab);
-            playerSkeleton = skeleton;
+            
             if (PlayerAssignmentChanged != null)
             {
                 PlayerAssignmentChanged(playerSkeleton.id, true);
