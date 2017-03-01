@@ -395,10 +395,17 @@ namespace Captury
         /// </summary>
         private void ClearPlayerAssignment()
         {
+            if(playerSkeleton == null)
+            {
+                Debug.LogError("Trying to clear player assignment, but playerSkeleton == null");
+                return;
+            }
+
             if (PlayerAssignmentChanged != null)
             {
                 PlayerAssignmentChanged(playerSkeleton.id, false);
             }
+
             playerSkeleton.playerID = -1;
             capturyLeapIntegration.setTargetModel(null, null, -1);
             transformFollower.Target = null;
