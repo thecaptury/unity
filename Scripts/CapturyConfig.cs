@@ -1,10 +1,9 @@
-﻿using Innoactive.Toolkit;
-using System;
+﻿using System;
 
 namespace Captury
 {
     [Serializable]
-    public class CapturyConfig : Singleton<CapturyConfig>
+    public class CapturyConfig
     {
         /// <summary>
         /// AR Tag IDs which are assigned to the local user
