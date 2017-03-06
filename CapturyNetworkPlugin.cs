@@ -162,6 +162,14 @@ namespace Captury
         public bool consumed;
     }
 
+    [Serializable]
+    public class ARTag
+    {
+		public int id;
+        public Vector3 translation;
+        public Quaternion rotation;
+    }
+
     //====================
     // the network plugin
     //====================
@@ -225,13 +233,13 @@ namespace Captury
         public event LostSkeletonDelegate lostSkeleton;
         public delegate void CamerasChangedDelegate(Vector3[] positions, Quaternion[] rotations);
         public event CamerasChangedDelegate CamerasChanged;
-        public delegate void DetectedARTagsDelegate(CapturyARTag[] artags);
+        public delegate void DetectedARTagsDelegate(ARTag[] artags);
         public event DetectedARTagsDelegate detectedARTags;
 
         public Vector3[] cameraPositions;
         public Quaternion[] cameraOrientations;
 		
-		public CapturyARTag[] arTags = new CapturyARTag[0];
+		public ARTag[] arTags = new ARTag[0];
 
         private string headJointName = "Head";
 
@@ -358,7 +366,9 @@ namespace Captury
 					if (arTag.id == -1)
 						break;
 					Array.Resize(ref arTags, num+1);
-					arTags[num] = arTag;
+					arTags[num].id = arTag.id;
+					arTags[num].translation = ConvertPosition(Vector3(arTag.ox, arTag.oy, arTag.oz));
+					arTags[num].rotation = ConvertRotation(Vector3(arTag.rx, arTag.ry, arTag.rz));
 					at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
 				}
 				if (num != 0 && detectedARTags != null)
