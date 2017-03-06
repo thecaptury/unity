@@ -12,11 +12,11 @@ namespace Captury
     public class CapturyAvatarManager : MonoBehaviour
     {
         [SerializeField]
-        [Tooltip("Avatar prefabs for local players (without head). userAvatarID is set in " + CAPTURY_CONFIG_FILE_PATH)]
+        [Tooltip("Avatar prefabs for local players (without head). userAvatarID is set in the Captury config file (see CapturyConfigManager for more infos)")]
         private GameObject[] localAvatarPrefabs = new GameObject[] { };
 
         [SerializeField]
-        [Tooltip("Avatar prefabs for remote players (with head). userAvatarID is set in " + CAPTURY_CONFIG_FILE_PATH)]
+        [Tooltip("Avatar prefabs for remote players (with head). userAvatarID is set in he Captury config file (see CapturyConfigManager for more infos)")]
         private GameObject[] remoteAvatarPrefabs = new GameObject[] { };
 
         [SerializeField]
@@ -57,14 +57,9 @@ namespace Captury
         private CapturySkeleton playerSkeleton;
 
         /// <summary>
-        /// The captury config will be loaded from <see cref="CAPTURY_CONFIG_FILE_PATH"/>
+        /// The captury config will be loaded from <see cref="CapturyConfigManager.configFileName"/>
         /// </summary>
         private CapturyConfig capturyConfig;
-
-        /// <summary>
-        /// Path of the captury config file
-        /// </summary>
-        private const string CAPTURY_CONFIG_FILE_PATH = "capturyconfig.json";
 
         /// <summary>
         /// Avatar transform names, to find the right transforms of an instantiated avatar.
@@ -97,7 +92,9 @@ namespace Captury
 
         private void Start()
         {
-            LoadConfig();
+            // get config
+            capturyConfig = CapturyConfigManager.Config;
+
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
             capturyLeapIntegration = GetComponent<CapturyLeapIntegration>();
 
@@ -420,29 +417,6 @@ namespace Captury
         private bool IsLocalPlayer(CapturySkeleton skeleton)
         {
             return skeleton.Equals(playerSkeleton);
-        }
-
-        /// <summary>
-        /// Loads the config file.
-        /// Config values:
-        /// markerID=0...10
-        /// </summary>
-        private void LoadConfig()
-        {
-            // read the local player id
-            if (File.Exists(CAPTURY_CONFIG_FILE_PATH))
-            {
-                string json = File.ReadAllText(CAPTURY_CONFIG_FILE_PATH, System.Text.Encoding.ASCII);
-                capturyConfig = JsonUtility.FromJson<CapturyConfig>(json);
-                if(capturyConfig == null)
-                {
-                    Debug.LogError("Couldn't parse json from " + CAPTURY_CONFIG_FILE_PATH + " to CapturyConfig");
-                }
-            }
-            else
-            {
-                Debug.LogError("No Captury config file found at " + CAPTURY_CONFIG_FILE_PATH);
-            }
         }
     }
 }

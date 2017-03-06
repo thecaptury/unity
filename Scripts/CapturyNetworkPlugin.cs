@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Text;
 using UnityEngine;
 
 namespace Captury
@@ -213,12 +212,12 @@ namespace Captury
         [DllImport("RemoteCaptury")]
         private static extern void Captury_freeARTags(IntPtr arTags);
 
-		// config settings
+		// config settings will be overriden by CapturyConfigManager.Config if it can be loaded
         public string host = "127.0.0.1";
         public ushort port = 2101;
         public float scaleFactor = 0.001f; // mm to m
         public int actorCheckTimeout = 500; // in ms
-		public bool streamARTags = false;
+        public bool streamARTags = false;
 
         // Events
         public delegate void SkeletonDelegate(CapturySkeleton skeleton);
@@ -264,6 +263,18 @@ namespace Captury
 
         void Awake()
         {
+            // load config
+            CapturyConfig config = CapturyConfigManager.Config;
+            if (config != null)
+            {
+                host = config.host;
+                port = config.port;
+                scaleFactor = config.scaleFactor;
+                actorCheckTimeout = config.actorCheckTimeout;
+                streamARTags = config.streamARTags;
+                Debug.LogFormat("CapturyNetworkPlugin settings were overriden by values from {0}.", CapturyConfigManager.configFilePath);
+            }
+
             // register to CapturyOrigin change event
             capturyOriginManager = GetComponent<CapturyOriginManager>();
             capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
