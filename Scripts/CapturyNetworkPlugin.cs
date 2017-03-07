@@ -44,7 +44,7 @@ namespace Captury
     {
         public int id;
         public float ox, oy, oz; // position
-        public float nx, ny, nz; // normal
+        public float rx, ry, rz; // rotation
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -409,8 +409,8 @@ namespace Captury
                         break;
                     Array.Resize(ref arTags, num + 1);
                     arTags[num].id = arTag.id;
-                    +arTags[num].translation = ConvertPosition(Vector3(arTag.ox, arTag.oy, arTag.oz));
-                    +arTags[num].rotation = ConvertRotation(Vector3(arTag.rx, arTag.ry, arTag.rz));
+                    arTags[num].translation = ConvertPosition(new Vector3(arTag.ox, arTag.oy, arTag.oz));
+                    arTags[num].rotation = ConvertRotation(new Vector3(arTag.rx, arTag.ry, arTag.rz));
                     at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
                 }
                 if (num != 0 && ARTagsDetected != null)

@@ -185,13 +185,13 @@ namespace Captury
         /// Called when a Captury AR tags (markers) are detected
         /// </summary>
         /// <param name="tags"></param>
-        private void OnARTagsDetected(CapturyARTag[] tags)
+        private void OnARTagsDetected(ARTag[] tags)
         {
             // check player/skeleton assignment with AR tags
             if (playerSkeleton == null)
             {
                 // get the AR tags which are assigned to the player 
-                List<CapturyARTag> playerARTags = tags.Where(t => capturyConfig.arTagIDs.Contains(t.id)).ToList();
+                List<ARTag> playerARTags = tags.Where(t => capturyConfig.arTagIDs.Contains(t.id)).ToList();
                 foreach (var tag in playerARTags)
                 {
                     CapturySkeleton skel = GetAttachedSkeleton(tag);
@@ -290,22 +290,20 @@ namespace Captury
         }
 
         /// <summary>
-        /// Checks if the <see cref="CapturyARTag"/> is attached to the <see cref="CapturySkeleton"/> by comparing their positions
+        /// Checks if the <see cref="ARTag"/> is attached to the <see cref="CapturySkeleton"/> by comparing their positions
         /// </summary>
         /// <param name="tag"></param>
         /// <param name="skel"></param>
         /// <returns></returns>
-        private bool IsAttachedToSkeleton(CapturyARTag tag, CapturySkeleton skel)
+        private bool IsAttachedToSkeleton(ARTag tag, CapturySkeleton skel)
         {
-            // TODO Nils: Tag attachment logic
             float threshold = 0.5f;
-            Vector3 tP = new Vector3(tag.ox, tag.oy, tag.oz);
             foreach(var joint in skel.joints)
             {
                 if(joint != null && joint.transform != null)
                 {
                     // TODO check if local / global position
-                    if (Vector3.Distance(tP, joint.transform.position) < threshold)
+                    if (Vector3.Distance(tag.translation, joint.transform.position) < threshold)
                     {
                         return true;
                     }
@@ -315,11 +313,11 @@ namespace Captury
         }
 
         /// <summary>
-        /// Checks if the given <see cref="CapturyARTag"/> is attached to a <see cref="CapturySkeleton"/> in <see cref="trackedSkeletons"/>
+        /// Checks if the given <see cref="ARTag"/> is attached to a <see cref="CapturySkeleton"/> in <see cref="trackedSkeletons"/>
         /// </summary>
         /// <param name="tag"></param>
         /// <returns>The skeleton which tag is attached to. null if there's none.</returns>
-        private CapturySkeleton GetAttachedSkeleton(CapturyARTag tag)
+        private CapturySkeleton GetAttachedSkeleton(ARTag tag)
         {
             foreach(var skel in trackedSkeletons)
             {
