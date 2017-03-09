@@ -77,18 +77,17 @@ namespace Captury
         public event PlayerAssignmentChangedDelegate PlayerAssignmentChanged;
 
         /// <summary>
-        /// Can be called from a multiplayer manager to set the skeletons playerID
+        /// If set to true, AR Tags will be displayed as GameObjects
         /// </summary>
-        /// <param name="skeletonID">Captury Skeleton id</param>
-        /// <param name="playerID">Networking Player id</param>
-        public void SetSkeletonPlayerID(int skeletonID, int playerID)
-        {
-            CapturySkeleton skel = trackedSkeletons.First(s => s.id == skeletonID);
-            if (skel != null)
-            {
-                skel.playerID = playerID;
-            }
-        }
+        private bool debugARTags = false;
+        /// <summary>
+        /// Used to determine if we didn't have ARTag updates between two frames and need to destroy the AR Tag GameObjects
+        /// </summary>
+        private bool arTagsUpdated = false;
+        /// <summary>
+        /// Debug GameObjects for ARTags
+        /// </summary>
+        private Dictionary<int, GameObject> arTagGameObjects = new Dictionary<int, GameObject>();
 
         private void Start()
         {
@@ -148,6 +147,36 @@ namespace Captury
             {
                 DestroyAvatars(lostSkeletons);
             }
+
+            if (debugARTags)
+            {
+                if (arTagsUpdated == false)
+                {
+                    lock (arTagGameObjects)
+                    {
+                        foreach (var tag in arTagGameObjects)
+                        {
+                            DestroyImmediate(tag.Value);
+                        }
+                        arTagGameObjects.Clear();
+                    }
+                }
+                arTagsUpdated = false;
+            }
+        }
+
+        /// <summary>
+        /// Can be called from a multiplayer manager to set the skeletons playerID
+        /// </summary>
+        /// <param name="skeletonID">Captury Skeleton id</param>
+        /// <param name="playerID">Networking Player id</param>
+        public void SetSkeletonPlayerID(int skeletonID, int playerID)
+        {
+            CapturySkeleton skel = trackedSkeletons.First(s => s.id == skeletonID);
+            if (skel != null)
+            {
+                skel.playerID = playerID;
+            }
         }
 
         /// <summary>
@@ -206,6 +235,52 @@ namespace Captury
                             Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
                         }
                     }
+                }
+            }
+
+            if (debugARTags)
+            {
+                ShowARTags(tags);
+                arTagsUpdated = true;
+            }
+        }
+
+        /// <summary>
+        /// Shows AR Tags as flat cubes
+        /// </summary>
+        /// <param name="tags"></param>
+        private void ShowARTags(ARTag[] tags)
+        {
+            lock (arTagGameObjects)
+            {
+                List<int> tagsToRemove = new List<int>();
+                foreach (var tag in arTagGameObjects)
+                {
+                    bool isStillActive = tags.Any(item => item.id == tag.Key);
+                    if (isStillActive == false)
+                    {
+                        DestroyImmediate(tag.Value);
+                        tagsToRemove.Add(tag.Key);
+                    }
+                }
+                foreach (var id in tagsToRemove)
+                {
+                    arTagGameObjects.Remove(id);
+                }
+
+                foreach (var tag in tags)
+                {
+                    if (arTagGameObjects.ContainsKey(tag.id) == false)
+                    {
+                        // can be optimized with object pool
+                        GameObject gO = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        gO.name = "arTag " + tag.id;
+                        gO.transform.localScale = new Vector3(0.1f, 0.1f, 0.01f);
+                        arTagGameObjects.Add(tag.id, gO);
+                    }
+                    // update pose
+                    arTagGameObjects[tag.id].transform.position = tag.translation;
+                    arTagGameObjects[tag.id].transform.rotation = tag.rotation;
                 }
             }
         }
