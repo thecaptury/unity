@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEngine;
@@ -76,14 +76,15 @@ namespace Captury
         public delegate void PlayerAssignmentChangedDelegate(int skeletonID, bool isAssigned);
         public event PlayerAssignmentChangedDelegate PlayerAssignmentChanged;
 
-        /// <summary>
-        /// If set to true, AR Tags will be displayed as GameObjects
-        /// </summary>
+        [SerializeField]
+        [Tooltip("If set to true, AR Tags will be displayed as GameObjects")]
         private bool debugARTags = false;
+
         /// <summary>
         /// Used to determine if we didn't have ARTag updates between two frames and need to destroy the AR Tag GameObjects
         /// </summary>
         private bool arTagsUpdated = false;
+
         /// <summary>
         /// Debug GameObjects for ARTags
         /// </summary>
@@ -219,7 +220,7 @@ namespace Captury
             // check player/skeleton assignment with AR tags
             if (playerSkeleton == null)
             {
-                // get the AR tags which are assigned to the player 
+                // get the AR tags which are assigned to the player
                 List<ARTag> playerARTags = tags.Where(t => capturyConfig.arTagIDs.Contains(t.id)).ToList();
                 foreach (var tag in playerARTags)
                 {
@@ -452,7 +453,7 @@ namespace Captury
             {
                 Debug.Log("Cannot find head on target avatar with name " + AVATAR_HEAD_TRANSFORM_NAME);
             }
-            
+
             if (PlayerAssignmentChanged != null)
             {
                 PlayerAssignmentChanged(playerSkeleton.id, true);
