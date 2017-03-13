@@ -13,7 +13,7 @@ namespace Captury
         /// <summary>
         /// Path to the config file
         /// </summary>
-        public static readonly string configFilePath = "./capturyConfig.json";
+        public static readonly string configFilePath = "./captury-config.json";
 
         private static CapturyConfig config;
 
