@@ -394,7 +394,6 @@ namespace Captury
                 // something went wrong, get error message
                 IntPtr msg = Captury_getLastErrorMessage();
                 string errmsg = Marshal.PtrToStringAnsi(msg);
-                Debug.Log("Stream error: " + errmsg);
                 Captury_freeErrorMessage(msg);
             }
             else
