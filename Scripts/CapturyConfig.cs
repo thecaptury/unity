@@ -39,5 +39,15 @@ namespace Captury
         /// if true AR tags will be streamed from Captury Live
         /// </summary>
         public bool streamARTags;
+
+        /// <summary>
+        /// if true AR tags will be displayed as smal plates
+        /// </summary>
+        public bool debugARTags;
+
+        /// <summary>
+        /// Distance threshold (in meter) for user assignment with AR Tag
+        /// </summary>
+        public float arTagSkeletonThreshold;
     }
 }

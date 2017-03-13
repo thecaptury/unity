@@ -76,10 +76,6 @@ namespace Captury
         public delegate void PlayerAssignmentChangedDelegate(int skeletonID, bool isAssigned);
         public event PlayerAssignmentChangedDelegate PlayerAssignmentChanged;
 
-        [SerializeField]
-        [Tooltip("If set to true, AR Tags will be displayed as GameObjects")]
-        private bool debugARTags = false;
-
         /// <summary>
         /// Used to determine if we didn't have ARTag updates between two frames and need to destroy the AR Tag GameObjects
         /// </summary>
@@ -149,7 +145,7 @@ namespace Captury
                 DestroyAvatars(lostSkeletons);
             }
 
-            if (debugARTags)
+            if (capturyConfig.debugARTags)
             {
                 if (arTagsUpdated == false)
                 {
@@ -239,7 +235,7 @@ namespace Captury
                 }
             }
 
-            if (debugARTags)
+            if (capturyConfig.debugARTags)
             {
                 ShowARTags(tags);
                 arTagsUpdated = true;
@@ -373,16 +369,12 @@ namespace Captury
         /// <returns></returns>
         private bool IsAttachedToSkeleton(ARTag tag, CapturySkeleton skel)
         {
-            float threshold = 0.5f;
-            foreach(var joint in skel.joints)
+            CapturySkeletonJoint headJoint = skel.joints.First(item => item.name == CapturyNetworkPlugin.HeadJointName);
+            if (headJoint != null && headJoint.transform != null)
             {
-                if(joint != null && joint.transform != null)
+                if (Vector3.Distance(tag.translation, headJoint.transform.position) < capturyConfig.arTagSkeletonThreshold)
                 {
-                    // TODO check if local / global position
-                    if (Vector3.Distance(tag.translation, joint.transform.position) < threshold)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
             return false;

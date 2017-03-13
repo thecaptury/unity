@@ -5,5 +5,7 @@
 	"port" : 2101,
 	"actorCheckTimeout" : 500,
 	"scaleFactor" : 0.001,
-	"streamARTags" : true
+	"streamARTags" : true,
+	"debugARTags" : false,
+	"arTagSkeletonThreshold" : 0.2
 }
