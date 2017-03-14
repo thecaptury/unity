@@ -656,14 +656,18 @@ namespace Captury
 
             int index;
             if (jointsWithConstraints.ContainsKey(jointName))
+            {
                 index = jointsWithConstraints[jointName];
+            }
             else
             {
                 index = 0;
                 foreach (CapturySkeletonJoint j in skel.joints)
                 {
                     if (j.name == jointName)
+                    {
                         break;
+                    } 
                     ++index;
                 }
                 if (index == skel.joints.Length)

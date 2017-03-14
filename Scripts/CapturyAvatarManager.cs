@@ -295,7 +295,8 @@ namespace Captury
             if (isLocal)
             {
                 avatars = localAvatarPrefabs;
-            } else
+            }
+            else
             {
                 avatars = remoteAvatarPrefabs;
             }
