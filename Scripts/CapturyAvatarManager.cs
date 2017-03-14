@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -158,17 +159,12 @@ namespace Captury
             {
                 lock (trackedARTags)
                 {
-                    if (Input.GetKeyDown(KeyCode.C))
-                    {
-                        // calibrate AR Tag offset
-
-                    }
+                    // get the AR tags which are attached to the players headset
+                    List<ARTag> trackedHeadsetTags = GetHeadsetARTags(trackedARTags);
 
                     // check headset to skeleton assignment with AR tags
                     if (playerSkeleton == null)
                     {
-                        // get the AR tags which are attached to the players headset
-                        List<ARTag> trackedHeadsetTags = trackedARTags.Where(trackedTag => capturyConfig.headsetARTags.Any(headsetTag => headsetTag.id == trackedTag.id)).ToList();
                         foreach (var tag in trackedHeadsetTags)
                         {
                             CapturySkeleton skel = GetAttachedSkeleton(tag);
@@ -201,10 +197,61 @@ namespace Captury
                         }
                     }
 
+                    if (Input.GetKeyDown(KeyCode.C))
+                    {
+                        // calibrate AR Tag offset
+                        CalibrateHeadsetARTags(trackedHeadsetTags, playerSkeleton);
+                    }
+
                     arTagsUpdated = false;
                 }
             }
 
+        }
+
+        /// <summary>
+        /// Looks for <see cref="ARTag"/>s in arTags which are assigned to the player/headset.
+        /// The offset from the found tags to the given <see cref="CapturySkeleton"/> head joint will be saved to <see cref="capturyConfig"/>.
+        /// </summary>
+        /// <param name="arTags">List of <see cref="ARTag"/>s to look for player/headset tags.</param>
+        /// <param name="skel"><see cref="CapturySkeleton"/> which head joint will be used to calculate the offsets.</param>
+        private void CalibrateHeadsetARTags(List<ARTag> arTags, CapturySkeleton skel)
+        {
+            if(arTags != null && skel != null)
+            {
+                List<ARTag> headsetTags = GetHeadsetARTags(arTags);
+                CapturySkeletonJoint headJoint = GetHeadJoint(playerSkeleton);
+                if (headJoint != null)
+                {
+                    foreach (var tag in headsetTags)
+                    {
+                        Vector3 posOffset = tag.translation - headJoint.transform.position;
+                        Vector3 headDirection = headJoint.transform.rotation * Vector3.forward;
+                        Vector3 tagDirection = tag.rotation * Vector3.forward;
+                        Quaternion rotOffset = Quaternion.FromToRotation(headDirection, tagDirection);
+
+                        CapturyConfig.HeadsetARTag headsetARTag = capturyConfig.headsetARTags.Single(t => t.id == tag.id);
+                        if (headsetARTag != null)
+                        {
+                            headsetARTag.offsetPosX = posOffset.x;
+                            headsetARTag.offsetPosY = posOffset.y;
+                            headsetARTag.offsetPosZ = posOffset.z;
+                            headsetARTag.offsetRotX = rotOffset.eulerAngles.x;
+                            headsetARTag.offsetRotY = rotOffset.eulerAngles.y;
+                            headsetARTag.offsetRotZ = rotOffset.eulerAngles.z;
+                            Debug.LogFormat("Set new offset of headsetARTag {0}, pos:{1}, rot{2}", headsetARTag.id, posOffset, rotOffset.eulerAngles);
+                        }
+                        else
+                        {
+                            Debug.LogErrorFormat("headsetARTag == null for tag id {0}", tag.id);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.LogError("Can't calibrate since headJoint == null");
+                }
+            }
         }
 
         /// <summary>
@@ -415,7 +462,7 @@ namespace Captury
         /// <returns></returns>
         private bool IsAttachedToSkeleton(ARTag tag, CapturySkeleton skel)
         {
-            CapturySkeletonJoint headJoint = skel.joints.First(item => item.name == CapturyNetworkPlugin.HeadJointName);
+            CapturySkeletonJoint headJoint = GetHeadJoint(skel);
             if (headJoint != null && headJoint.transform != null)
             {
                 if (Vector3.Distance(tag.translation, headJoint.transform.position) < capturyConfig.arTagSkeletonThreshold)
@@ -530,5 +577,24 @@ namespace Captury
         {
             return skeleton.Equals(playerSkeleton);
         }
+
+        #region CapturySkeleton Helper
+        private CapturySkeletonJoint GetHeadJoint(CapturySkeleton skel)
+        {
+            return skel.joints.Single(item => item.name == CapturyNetworkPlugin.HeadJointName);
+        }
+        #endregion CapturySkeleton Helper
+
+        #region AR Tags
+        /// <summary>
+        /// Get all <see cref="ARTag"/>s in the given list which are assigned to the headset. This is defined in <see cref="capturyConfig"/>.
+        /// </summary>
+        /// <param name="tags"></param>
+        /// <returns>List of AR Tags which are assigned to the headset</returns>
+        private List<ARTag> GetHeadsetARTags(List<ARTag> tags)
+        {
+            return tags.Where(tag => capturyConfig.headsetARTags.Any(headsetTag => headsetTag.id == tag.id)).ToList();
+        }
+        #endregion AR Tags
     }
 }
