@@ -641,7 +641,7 @@ namespace Captury
 
         public void setRotationConstraint(int id, string jointName, Transform t)
         {
-            if (skeletons.ContainsKey(id))
+            if (skeletons.ContainsKey(id) == false)
             {
                 Debug.Log("Cannot set rotation for " + jointName + ": no skeleton with id " + id);
                 return;
