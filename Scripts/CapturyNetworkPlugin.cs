@@ -647,7 +647,9 @@ namespace Captury
                 return;
             }
             else
-                Debug.Log("Set " + jointName + "-rotation to " + t);
+            {
+                //Debug.Log("Set " + jointName + "-rotation to " + t);
+            }
             communicationMutex.WaitOne();
             CapturySkeleton skel = skeletons[id];
             communicationMutex.ReleaseMutex();
@@ -666,7 +668,7 @@ namespace Captury
                 }
                 if (index == skel.joints.Length)
                 {
-                    Debug.Log("Cannot set constraint for joint " + jointName + ": no such joint");
+                    //Debug.Log("Cannot set constraint for joint " + jointName + ": no such joint");
                     return;
                 }
             }
