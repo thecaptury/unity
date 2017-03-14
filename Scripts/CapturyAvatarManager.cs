@@ -84,7 +84,12 @@ namespace Captury
         /// <summary>
         /// Debug GameObjects for ARTags
         /// </summary>
-        private Dictionary<int, GameObject> arTagGameObjects = new Dictionary<int, GameObject>();
+        private Dictionary<ARTag, GameObject> trackedARTagGameObjects = new Dictionary<ARTag, GameObject>();
+
+        /// <summary>
+        /// List of <see cref="ARTag"/> which are currently tracked
+        /// </summary>
+        private List<ARTag> trackedARTags = new List<ARTag>();
 
         private void Start()
         {
@@ -149,22 +154,57 @@ namespace Captury
             {
                 DestroyAvatars(lostSkeletons);
             }
-
-            if (capturyConfig.debugARTags)
+            lock (trackedSkeletons)
             {
-                if (arTagsUpdated == false)
+                lock (trackedARTags)
                 {
-                    lock (arTagGameObjects)
+                    if (Input.GetKeyDown(KeyCode.C))
                     {
-                        foreach (var tag in arTagGameObjects)
-                        {
-                            DestroyImmediate(tag.Value);
-                        }
-                        arTagGameObjects.Clear();
+                        // calibrate AR Tag offset
+
                     }
+
+                    // check headset to skeleton assignment with AR tags
+                    if (playerSkeleton == null)
+                    {
+                        // get the AR tags which are attached to the players headset
+                        List<ARTag> trackedHeadsetTags = trackedARTags.Where(trackedTag => capturyConfig.headsetARTags.Any(headsetTag => headsetTag.id == trackedTag.id)).ToList();
+                        foreach (var tag in trackedHeadsetTags)
+                        {
+                            CapturySkeleton skel = GetAttachedSkeleton(tag);
+                            if (skel != null)
+                            {
+                                if (skel.playerID == -1)
+                                {
+                                    AssignPlayerToSkeleton(skel);
+                                }
+                                else
+                                {
+                                    Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                                }
+                            }
+                        }
+                    }
+
+
+                    // Clear tracked AR Tags if there's no AR Tag update since last frame.
+                    if (arTagsUpdated == false)
+                    {
+                        trackedARTags.Clear();
+                        if (capturyConfig.debugARTags)
+                        {
+                            foreach (var tag in trackedARTagGameObjects)
+                            {
+                                DestroyImmediate(tag.Value);
+                            }
+                            trackedARTagGameObjects.Clear();
+                        }
+                    }
+
+                    arTagsUpdated = false;
                 }
-                arTagsUpdated = false;
             }
+
         }
 
         /// <summary>
@@ -218,72 +258,72 @@ namespace Captury
         /// <param name="tags"></param>
         private void OnARTagsDetected(ARTag[] tags)
         {
-            // check player/skeleton assignment with AR tags
-            if (playerSkeleton == null)
+            lock (trackedARTags)
             {
-                // get the AR tags which are assigned to the player
-                List<ARTag> playerARTags = tags.Where(t => capturyConfig.arTagIDs.Contains(t.id)).ToList();
-                foreach (var tag in playerARTags)
+                List<ARTag> lostTags = new List<ARTag>();
+
+                // find lost AR tags and delete them
+                foreach (var prevTag in trackedARTags)
                 {
-                    CapturySkeleton skel = GetAttachedSkeleton(tag);
-                    if (skel != null)
+                    ARTag newTag = tags.First(item => item.id == prevTag.id);
+                    if (newTag == null)
                     {
-                        if (skel.playerID == -1)
+                        // tag is no longer tracked
+                        lostTags.Add(prevTag);
+                        if (capturyConfig.debugARTags)
                         {
-                            AssignPlayerToSkeleton(skel);
-                        }
-                        else
-                        {
-                            Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                            lock (trackedARTagGameObjects)
+                            {
+                                GameObject gO = trackedARTagGameObjects[prevTag];
+                                DestroyImmediate(gO);
+                                trackedARTagGameObjects.Remove(prevTag);
+                            }
                         }
                     }
                 }
-            }
+                trackedARTags.RemoveAll(item => lostTags.Contains(item));
 
-            if (capturyConfig.debugARTags)
-            {
-                ShowARTags(tags);
-                arTagsUpdated = true;
-            }
-        }
-
-        /// <summary>
-        /// Shows AR Tags as flat cubes
-        /// </summary>
-        /// <param name="tags"></param>
-        private void ShowARTags(ARTag[] tags)
-        {
-            lock (arTagGameObjects)
-            {
-                List<int> tagsToRemove = new List<int>();
-                foreach (var tag in arTagGameObjects)
-                {
-                    bool isStillActive = tags.Any(item => item.id == tag.Key);
-                    if (isStillActive == false)
-                    {
-                        DestroyImmediate(tag.Value);
-                        tagsToRemove.Add(tag.Key);
-                    }
-                }
-                foreach (var id in tagsToRemove)
-                {
-                    arTagGameObjects.Remove(id);
-                }
-
+                // find new AR tags / update existing
                 foreach (var tag in tags)
                 {
-                    if (arTagGameObjects.ContainsKey(tag.id) == false)
+                    int tagIndexInPrevTagsArray = trackedARTags.FindIndex(item => item.id == tag.id);
+                    if (tagIndexInPrevTagsArray != -1)
                     {
-                        // can be optimized with object pool
-                        GameObject gO = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                        gO.name = "arTag " + tag.id;
-                        gO.transform.localScale = new Vector3(0.1f, 0.1f, 0.01f);
-                        arTagGameObjects.Add(tag.id, gO);
+                        // update AR tag
+                        trackedARTags[tagIndexInPrevTagsArray] = tag;
+                        if (capturyConfig.debugARTags)
+                        {
+                            lock (trackedARTagGameObjects)
+                            {
+                                // update pose
+                                GameObject gO = trackedARTagGameObjects.First(item => item.Key.id == tag.id).Value;
+                                if (gO != null)
+                                {
+                                    gO.transform.position = tag.translation;
+                                    gO.transform.rotation = tag.rotation;
+                                }
+                            }
+                        }
                     }
-                    // update pose
-                    arTagGameObjects[tag.id].transform.position = tag.translation;
-                    arTagGameObjects[tag.id].transform.rotation = tag.rotation;
+                    else
+                    {
+                        // new AR tag found
+                        trackedARTags.Add(tag);
+                        if (capturyConfig.debugARTags)
+                        {
+                            lock (trackedARTagGameObjects)
+                            {
+                                // can be optimized with object pool
+                                GameObject gO = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                                gO.name = "arTag " + tag.id;
+                                gO.transform.localScale = new Vector3(0.1f, 0.1f, 0.01f);
+                                trackedARTagGameObjects.Add(tag, gO);
+                            }
+                        }
+                    }
                 }
+
+                arTagsUpdated = true;
             }
         }
 
