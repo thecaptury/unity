@@ -150,13 +150,10 @@ namespace Captury
             {
                 lock (trackedARTags)
                 {
-                    // get the AR tags which are attached to the players headset
-                    List<ARTag> trackedHeadsetTags = GetHeadsetARTags(trackedARTags);
-
                     // check headset to skeleton assignment with AR tags
                     if (playerSkeleton == null)
                     {
-                        TryARTagToSkeletonAssignemnt(trackedHeadsetTags);
+                        TryARTagToSkeletonAssignemnt(trackedARTags);
                     }
 
                     // Clear tracked AR Tags if there's no AR Tag update since last frame.
@@ -168,7 +165,7 @@ namespace Captury
                     if (Input.GetKeyDown(KeyCode.C))
                     {
                         // calibrate AR Tag offset
-                        CalibrateHeadsetARTags(trackedHeadsetTags, playerSkeleton);
+                        CalibrateHeadsetARTags(trackedARTags, playerSkeleton);
                     }
 
                     arTagsUpdated = false;
@@ -533,7 +530,7 @@ namespace Captury
             if (arTags != null && skel != null)
             {
                 List<ARTag> headsetTags = GetHeadsetARTags(arTags);
-                CapturySkeletonJoint headJoint = GetHeadJoint(playerSkeleton);
+                CapturySkeletonJoint headJoint = GetHeadJoint(skel);
                 if (headJoint != null)
                 {
                     foreach (var tag in headsetTags)
@@ -603,8 +600,10 @@ namespace Captury
             return null;
         }
 
-        private void TryARTagToSkeletonAssignemnt(List<ARTag> trackedHeadsetTags)
+        private void TryARTagToSkeletonAssignemnt(List<ARTag> arTags)
         {
+            // get the AR tags which are attached to the players headset
+            List<ARTag> trackedHeadsetTags = GetHeadsetARTags(arTags);
             foreach (var tag in trackedHeadsetTags)
             {
                 CapturySkeleton skel = GetAttachedSkeleton(tag);
