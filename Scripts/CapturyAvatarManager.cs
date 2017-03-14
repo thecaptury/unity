@@ -134,6 +134,11 @@ namespace Captury
             }
         }
 
+        private void OnApplicationQuit()
+        {
+            CapturyConfigManager.SaveConfig();
+        }
+
         private void Update()
         {
             lock (newSkeletons)

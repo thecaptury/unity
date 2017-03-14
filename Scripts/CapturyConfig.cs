@@ -5,10 +5,29 @@ namespace Captury
     [Serializable]
     public class CapturyConfig
     {
+        [Serializable]
+        public class HeadsetARTags
+        {
+            /// <summary>
+            /// id of the AR tag which is attached to the headset
+            /// </summary>
+            public int id;
+
+            /// <summary>
+            /// offsets to headset origin
+            /// </summary>
+            public float offsetPosX;
+            public float offsetPosY;
+            public float offsetPosZ;
+            public float offsetRotX;
+            public float offsetRotY;
+            public float offsetRotZ;
+        }
+
         /// <summary>
-        /// AR Tag IDs which are assigned to the local user
+        /// array of ar tags which are attached to the headset
         /// </summary>
-        public int[] arTagIDs;
+        public HeadsetARTags[] headsetARTags;
 
         /// <summary>
         /// Avatar ID which is assigned to the local user
