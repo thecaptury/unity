@@ -92,6 +92,7 @@ namespace Captury
         /// </summary>
         private List<ARTag> trackedARTags = new List<ARTag>();
 
+        #region Unity Methods
         private void Start()
         {
             // get config
@@ -129,6 +130,52 @@ namespace Captury
             networkPlugin.ARTagsDetected += OnARTagsDetected;
         }
 
+        private void Update()
+        {
+            lock (newSkeletons)
+            {
+                lock (trackedSkeletons)
+                {
+                    InstantiateDefaultAvatars(newSkeletons);
+                }
+            }
+            lock (lostSkeletons)
+            {
+                lock (trackedSkeletons)
+                {
+                    DestroyAvatars(lostSkeletons);
+                }
+            }
+            lock (trackedSkeletons)
+            {
+                lock (trackedARTags)
+                {
+                    // get the AR tags which are attached to the players headset
+                    List<ARTag> trackedHeadsetTags = GetHeadsetARTags(trackedARTags);
+
+                    // check headset to skeleton assignment with AR tags
+                    if (playerSkeleton == null)
+                    {
+                        TryARTagToSkeletonAssignemnt(trackedHeadsetTags);
+                    }
+
+                    // Clear tracked AR Tags if there's no AR Tag update since last frame.
+                    if (arTagsUpdated == false)
+                    {
+                        ClearTrackedARTags();
+                    }
+
+                    if (Input.GetKeyDown(KeyCode.C))
+                    {
+                        // calibrate AR Tag offset
+                        CalibrateHeadsetARTags(trackedHeadsetTags, playerSkeleton);
+                    }
+
+                    arTagsUpdated = false;
+                }
+            }
+        }
+
         private void OnDestroy()
         {
             // unregister from events
@@ -144,115 +191,7 @@ namespace Captury
         {
             CapturyConfigManager.SaveConfig();
         }
-
-        private void Update()
-        {
-            lock (newSkeletons)
-            {
-                InstantiateDefaultAvatars(newSkeletons);
-            }
-            lock (lostSkeletons)
-            {
-                DestroyAvatars(lostSkeletons);
-            }
-            lock (trackedSkeletons)
-            {
-                lock (trackedARTags)
-                {
-                    // get the AR tags which are attached to the players headset
-                    List<ARTag> trackedHeadsetTags = GetHeadsetARTags(trackedARTags);
-
-                    // check headset to skeleton assignment with AR tags
-                    if (playerSkeleton == null)
-                    {
-                        foreach (var tag in trackedHeadsetTags)
-                        {
-                            CapturySkeleton skel = GetAttachedSkeleton(tag);
-                            if (skel != null)
-                            {
-                                if (skel.playerID == -1)
-                                {
-                                    AssignPlayerToSkeleton(skel);
-                                }
-                                else
-                                {
-                                    Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
-                                }
-                            }
-                        }
-                    }
-
-
-                    // Clear tracked AR Tags if there's no AR Tag update since last frame.
-                    if (arTagsUpdated == false)
-                    {
-                        trackedARTags.Clear();
-                        if (capturyConfig.debugARTags)
-                        {
-                            foreach (var tag in trackedARTagGameObjects)
-                            {
-                                DestroyImmediate(tag.Value);
-                            }
-                            trackedARTagGameObjects.Clear();
-                        }
-                    }
-
-                    if (Input.GetKeyDown(KeyCode.C))
-                    {
-                        // calibrate AR Tag offset
-                        CalibrateHeadsetARTags(trackedHeadsetTags, playerSkeleton);
-                    }
-
-                    arTagsUpdated = false;
-                }
-            }
-
-        }
-
-        /// <summary>
-        /// Looks for <see cref="ARTag"/>s in arTags which are assigned to the player/headset.
-        /// The offset from the found tags to the given <see cref="CapturySkeleton"/> head joint will be saved to <see cref="capturyConfig"/>.
-        /// </summary>
-        /// <param name="arTags">List of <see cref="ARTag"/>s to look for player/headset tags.</param>
-        /// <param name="skel"><see cref="CapturySkeleton"/> which head joint will be used to calculate the offsets.</param>
-        private void CalibrateHeadsetARTags(List<ARTag> arTags, CapturySkeleton skel)
-        {
-            if(arTags != null && skel != null)
-            {
-                List<ARTag> headsetTags = GetHeadsetARTags(arTags);
-                CapturySkeletonJoint headJoint = GetHeadJoint(playerSkeleton);
-                if (headJoint != null)
-                {
-                    foreach (var tag in headsetTags)
-                    {
-                        Vector3 posOffset = tag.translation - headJoint.transform.position;
-                        Vector3 headDirection = headJoint.transform.rotation * Vector3.forward;
-                        Vector3 tagDirection = tag.rotation * Vector3.forward;
-                        Quaternion rotOffset = Quaternion.FromToRotation(headDirection, tagDirection);
-
-                        CapturyConfig.HeadsetARTag headsetARTag = capturyConfig.headsetARTags.Single(t => t.id == tag.id);
-                        if (headsetARTag != null)
-                        {
-                            headsetARTag.offsetPosX = posOffset.x;
-                            headsetARTag.offsetPosY = posOffset.y;
-                            headsetARTag.offsetPosZ = posOffset.z;
-                            headsetARTag.offsetRotX = rotOffset.eulerAngles.x;
-                            headsetARTag.offsetRotY = rotOffset.eulerAngles.y;
-                            headsetARTag.offsetRotZ = rotOffset.eulerAngles.z;
-                            Debug.LogFormat("Set new offset of headsetARTag {0}, pos:{1}, rot{2}", headsetARTag.id, posOffset, rotOffset.eulerAngles);
-                        }
-                        else
-                        {
-                            Debug.LogErrorFormat("headsetARTag == null for tag id {0}", tag.id);
-                        }
-                    }
-                }
-                else
-                {
-                    Debug.LogError("Can't calibrate since headJoint == null");
-                }
-            }
-        }
+        #endregion Unity Methods
 
         /// <summary>
         /// Can be called from a multiplayer manager to set the skeletons playerID
@@ -261,13 +200,14 @@ namespace Captury
         /// <param name="playerID">Networking Player id</param>
         public void SetSkeletonPlayerID(int skeletonID, int playerID)
         {
-            CapturySkeleton skel = trackedSkeletons.First(s => s.id == skeletonID);
+            CapturySkeleton skel = trackedSkeletons.Single(s => s.id == skeletonID);
             if (skel != null)
             {
                 skel.playerID = playerID;
             }
         }
 
+        #region Captury Delegates
         /// <summary>
         /// Called when a new captury skeleton is found
         /// </summary>
@@ -312,7 +252,7 @@ namespace Captury
                 // find lost AR tags and delete them
                 foreach (var prevTag in trackedARTags)
                 {
-                    ARTag newTag = tags.First(item => item.id == prevTag.id);
+                    ARTag newTag = tags.Single(item => item.id == prevTag.id);
                     if (newTag == null)
                     {
                         // tag is no longer tracked
@@ -343,7 +283,7 @@ namespace Captury
                             lock (trackedARTagGameObjects)
                             {
                                 // update pose
-                                GameObject gO = trackedARTagGameObjects.First(item => item.Key.id == tag.id).Value;
+                                GameObject gO = trackedARTagGameObjects.Single(item => item.Key.id == tag.id).Value;
                                 if (gO != null)
                                 {
                                     gO.transform.position = tag.translation;
@@ -373,7 +313,9 @@ namespace Captury
                 arTagsUpdated = true;
             }
         }
+        #endregion
 
+        #region Avatars
         /// <summary>
         /// Returns the avatar prefab with the given avatarID from <see cref="localAvatarPrefabs"/> or <see cref="remoteAvatarPrefabs"/> depending on isLocal.
         /// If avatarID is invalid, <see cref="defaultAvatar"/> will be returned
@@ -424,16 +366,13 @@ namespace Captury
         /// <param name="skeletons"></param>
         private void InstantiateDefaultAvatars(List<CapturySkeleton> skeletons)
         {
-            lock (trackedSkeletons)
+            foreach (CapturySkeleton skel in skeletons)
             {
-                foreach (CapturySkeleton skel in skeletons)
-                {
-                    Debug.Log("Instantiating avatar for skeleton with id " + skel.id + " and name " + skel.name);
-                    SetAvatar(skel, defaultAvatar);
-                    trackedSkeletons.Add(skel);
-                }
-                skeletons.Clear();
+                Debug.Log("Instantiating avatar for skeleton with id " + skel.id + " and name " + skel.name);
+                SetAvatar(skel, defaultAvatar);
+                trackedSkeletons.Add(skel);
             }
+            skeletons.Clear();
         }
 
         /// <summary>
@@ -441,55 +380,18 @@ namespace Captury
         /// </summary>
         private void DestroyAvatars(List<CapturySkeleton> skeltons)
         {
-            lock (trackedSkeletons)
+            foreach (CapturySkeleton skel in skeltons)
             {
-                foreach (CapturySkeleton skel in skeltons)
-                {
-                    Debug.Log("Destroying avatar for skeleton with id " + skel.id + " and name " + skel.name);
-                    DestroyImmediate(skel.mesh);
-                    skel.mesh = null;
-                    trackedSkeletons.Remove(skel);
-                }
-                skeltons.Clear();
+                Debug.Log("Destroying avatar for skeleton with id " + skel.id + " and name " + skel.name);
+                DestroyImmediate(skel.mesh);
+                skel.mesh = null;
+                trackedSkeletons.Remove(skel);
             }
+            skeltons.Clear();
         }
+        #endregion
 
-        /// <summary>
-        /// Checks if the <see cref="ARTag"/> is attached to the <see cref="CapturySkeleton"/> by comparing their positions
-        /// </summary>
-        /// <param name="tag"></param>
-        /// <param name="skel"></param>
-        /// <returns></returns>
-        private bool IsAttachedToSkeleton(ARTag tag, CapturySkeleton skel)
-        {
-            CapturySkeletonJoint headJoint = GetHeadJoint(skel);
-            if (headJoint != null && headJoint.transform != null)
-            {
-                if (Vector3.Distance(tag.translation, headJoint.transform.position) < capturyConfig.arTagSkeletonThreshold)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /// <summary>
-        /// Checks if the given <see cref="ARTag"/> is attached to a <see cref="CapturySkeleton"/> in <see cref="trackedSkeletons"/>
-        /// </summary>
-        /// <param name="tag"></param>
-        /// <returns>The skeleton which tag is attached to. null if there's none.</returns>
-        private CapturySkeleton GetAttachedSkeleton(ARTag tag)
-        {
-            foreach(var skel in trackedSkeletons)
-            {
-                if (IsAttachedToSkeleton(tag, skel))
-                {
-                    return skel;
-                }
-            }
-            return null;
-        }
-
+        #region CapturySkeleton To Avatar Handling
         /// <summary>
         /// Assigns the local player to the given <see cref="CapturySkeleton"/>.
         /// </summary>
@@ -567,6 +469,18 @@ namespace Captury
             transformFollower.Target = null;
             playerSkeleton = null;
         }
+        #endregion Skeleton To Player Assignment
+
+        #region CapturySkeleton Helper
+        /// <summary>
+        /// Returns the head <see cref="CapturySkeletonJoint"/> of the given <see cref="CapturySkeleton"/> by looking for <see cref="CapturyNetworkPlugin.HeadJointName"/>
+        /// </summary>
+        /// <param name="skel"></param>
+        /// <returns></returns>
+        private CapturySkeletonJoint GetHeadJoint(CapturySkeleton skel)
+        {
+            return skel.joints.Single(item => item.name == CapturyNetworkPlugin.HeadJointName);
+        }
 
         /// <summary>
         /// Return true if the given skeleton is the local player skeleton
@@ -577,15 +491,9 @@ namespace Captury
         {
             return skeleton.Equals(playerSkeleton);
         }
-
-        #region CapturySkeleton Helper
-        private CapturySkeletonJoint GetHeadJoint(CapturySkeleton skel)
-        {
-            return skel.joints.Single(item => item.name == CapturyNetworkPlugin.HeadJointName);
-        }
         #endregion CapturySkeleton Helper
 
-        #region AR Tags
+        #region AR Tag Helper
         /// <summary>
         /// Get all <see cref="ARTag"/>s in the given list which are assigned to the headset. This is defined in <see cref="capturyConfig"/>.
         /// </summary>
@@ -595,6 +503,124 @@ namespace Captury
         {
             return tags.Where(tag => capturyConfig.headsetARTags.Any(headsetTag => headsetTag.id == tag.id)).ToList();
         }
+
+        /// <summary>
+        /// Clears <see cref="trackedARTags"/> and <see cref="trackedARTagGameObjects"/>
+        /// </summary>
+        private void ClearTrackedARTags()
+        {
+            trackedARTags.Clear();
+            if (capturyConfig.debugARTags)
+            {
+                foreach (var tag in trackedARTagGameObjects)
+                {
+                    DestroyImmediate(tag.Value);
+                }
+                trackedARTagGameObjects.Clear();
+            }
+        }
         #endregion AR Tags
+
+        #region AR Tag To CapturySkeleton Handling
+        /// <summary>
+        /// Looks for <see cref="ARTag"/>s in arTags which are assigned to the player/headset.
+        /// The offset from the found tags to the given <see cref="CapturySkeleton"/> head joint will be saved to <see cref="capturyConfig"/>.
+        /// </summary>
+        /// <param name="arTags">List of <see cref="ARTag"/>s to look for player/headset tags.</param>
+        /// <param name="skel"><see cref="CapturySkeleton"/> which head joint will be used to calculate the offsets.</param>
+        private void CalibrateHeadsetARTags(List<ARTag> arTags, CapturySkeleton skel)
+        {
+            if (arTags != null && skel != null)
+            {
+                List<ARTag> headsetTags = GetHeadsetARTags(arTags);
+                CapturySkeletonJoint headJoint = GetHeadJoint(playerSkeleton);
+                if (headJoint != null)
+                {
+                    foreach (var tag in headsetTags)
+                    {
+                        Vector3 posOffset = tag.translation - headJoint.transform.position;
+                        Vector3 headDirection = headJoint.transform.rotation * Vector3.forward;
+                        Vector3 tagDirection = tag.rotation * Vector3.forward;
+                        Quaternion rotOffset = Quaternion.FromToRotation(headDirection, tagDirection);
+
+                        CapturyConfig.HeadsetARTag headsetARTag = capturyConfig.headsetARTags.Single(t => t.id == tag.id);
+                        if (headsetARTag != null)
+                        {
+                            headsetARTag.offsetPosX = posOffset.x;
+                            headsetARTag.offsetPosY = posOffset.y;
+                            headsetARTag.offsetPosZ = posOffset.z;
+                            headsetARTag.offsetRotX = rotOffset.eulerAngles.x;
+                            headsetARTag.offsetRotY = rotOffset.eulerAngles.y;
+                            headsetARTag.offsetRotZ = rotOffset.eulerAngles.z;
+                            Debug.LogFormat("Set new offset of headsetARTag {0}, pos:{1}, rot{2}", headsetARTag.id, posOffset, rotOffset.eulerAngles);
+                        }
+                        else
+                        {
+                            Debug.LogErrorFormat("headsetARTag == null for tag id {0}", tag.id);
+                        }
+                    }
+                }
+                else
+                {
+                    Debug.LogError("Can't calibrate since headJoint == null");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Checks if the <see cref="ARTag"/> is attached to the <see cref="CapturySkeleton"/> by comparing their positions
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <param name="skel"></param>
+        /// <returns></returns>
+        private bool IsAttachedToSkeleton(ARTag tag, CapturySkeleton skel)
+        {
+            CapturySkeletonJoint headJoint = GetHeadJoint(skel);
+            if (headJoint != null && headJoint.transform != null)
+            {
+                if (Vector3.Distance(tag.translation, headJoint.transform.position) < capturyConfig.arTagSkeletonThreshold)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if the given <see cref="ARTag"/> is attached to a <see cref="CapturySkeleton"/> in <see cref="trackedSkeletons"/>
+        /// </summary>
+        /// <param name="tag"></param>
+        /// <returns>The skeleton which tag is attached to. null if there's none.</returns>
+        private CapturySkeleton GetAttachedSkeleton(ARTag tag)
+        {
+            foreach (var skel in trackedSkeletons)
+            {
+                if (IsAttachedToSkeleton(tag, skel))
+                {
+                    return skel;
+                }
+            }
+            return null;
+        }
+
+        private void TryARTagToSkeletonAssignemnt(List<ARTag> trackedHeadsetTags)
+        {
+            foreach (var tag in trackedHeadsetTags)
+            {
+                CapturySkeleton skel = GetAttachedSkeleton(tag);
+                if (skel != null)
+                {
+                    if (skel.playerID == -1)
+                    {
+                        AssignPlayerToSkeleton(skel);
+                    }
+                    else
+                    {
+                        Debug.Log("Skeleton " + skel.id + " is already assigned to player " + skel.playerID);
+                    }
+                }
+            }
+        }
+        #endregion AR Tag CapturySkeleton
     }
 }
