@@ -173,6 +173,21 @@ namespace Captury
             }
         }
 
+        private void LateUpdate()
+        {
+            // rotational drift correction
+            List<ARTag> trackedHeadsetARTags = GetHeadsetARTags(trackedARTags);
+            if (trackedHeadsetARTags.Count > 0)
+            {
+                OVRCameraRig cameraRig = FindObjectOfType<OVRCameraRig>();
+                if(cameraRig != null)
+                {
+                    //Debug.LogFormat("Slerping from {0} to {1}", cameraRig.transform.rotation.eulerAngles, trackedHeadsetARTags[0].rotation.eulerAngles);
+                    //cameraRig.transform.rotation = Quaternion.Slerp(cameraRig.transform.rotation, trackedHeadsetARTags[0].rotation, 0.1f);
+                }
+            }
+        }
+
         private void OnDestroy()
         {
             // unregister from events
@@ -529,6 +544,7 @@ namespace Captury
         {
             if (arTags != null && skel != null)
             {
+                Debug.LogFormat("Head rotation: {0}, arTagRotation: {1}", GetHeadJoint(skel).transform.rotation.eulerAngles, arTags[0].rotation.eulerAngles);
                 List<ARTag> headsetTags = GetHeadsetARTags(arTags);
                 CapturySkeletonJoint headJoint = GetHeadJoint(skel);
                 if (headJoint != null)
