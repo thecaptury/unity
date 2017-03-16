@@ -163,7 +163,7 @@ namespace Captury
                 if (moveWrists)
                     targetHand.position = hand.WristPosition.ToVector3();
                 targetHand.rotation = hand.Basis.rotation.ToQuaternion() * rot;
-                Debug.Log(frame.Id + " leap hand rot " + hand.Basis.rotation.ToQuaternion());
+                //Debug.Log(frame.Id + " leap hand rot " + hand.Basis.rotation.ToQuaternion());
                 foreach (Leap.Finger finger in hand.Fingers)
                 {
                     int i = (int)finger.Type;

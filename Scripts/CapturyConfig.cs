@@ -5,10 +5,29 @@ namespace Captury
     [Serializable]
     public class CapturyConfig
     {
+        [Serializable]
+        public class HeadsetARTag
+        {
+            /// <summary>
+            /// id of the AR tag which is attached to the headset
+            /// </summary>
+            public int id;
+
+            /// <summary>
+            /// offsets from head to AR Tag
+            /// </summary>
+            public float offsetPosX;
+            public float offsetPosY;
+            public float offsetPosZ;
+            public float offsetRotX;
+            public float offsetRotY;
+            public float offsetRotZ;
+        }
+
         /// <summary>
-        /// AR Tag IDs which are assigned to the local user
+        /// array of ar tags which are attached to the headset
         /// </summary>
-        public int[] arTagIDs;
+        public HeadsetARTag[] headsetARTags;
 
         /// <summary>
         /// Avatar ID which is assigned to the local user
@@ -39,5 +58,15 @@ namespace Captury
         /// if true AR tags will be streamed from Captury Live
         /// </summary>
         public bool streamARTags;
+
+        /// <summary>
+        /// if true AR tags will be displayed as smal plates
+        /// </summary>
+        public bool debugARTags;
+
+        /// <summary>
+        /// Distance threshold (in meter) for user assignment with AR Tag
+        /// </summary>
+        public float arTagSkeletonThreshold;
     }
 }

@@ -251,7 +251,14 @@ namespace Captury
         /// </summary>
         private CapturyOrigin capturyOrigin;
 
-        private string headJointName = "Head";
+        private static readonly string headJointName = "Head";
+        public static string HeadJointName
+        {
+            get
+            {
+                return headJointName;
+            }
+        }
 
         // threading data for communication with server
         private Thread communicationThread;
@@ -320,6 +327,13 @@ namespace Captury
             //			Debug.Log ("Starting pose update...");
             communicationMutex.WaitOne();
 
+            // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
+            Vector3 offsetToOrigin = Vector3.zero;
+            if (capturyOrigin != null)
+            {
+                offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
+            }
+
             // fetch current pose for all skeletons
             foreach (KeyValuePair<int, CapturySkeleton> kvp in skeletons)
             {
@@ -358,13 +372,6 @@ namespace Captury
                     Vector3 pos = new Vector3();
                     Vector3 rot = new Vector3();
 
-                    // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
-                    Vector3 offsetToOrigin = Vector3.zero;
-                    if (capturyOrigin != null)
-                    {
-                        offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
-                    }
-
                     for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
                     {
                         // ignore any joints that do not map to a transform
@@ -394,7 +401,6 @@ namespace Captury
                 // something went wrong, get error message
                 IntPtr msg = Captury_getLastErrorMessage();
                 string errmsg = Marshal.PtrToStringAnsi(msg);
-                Debug.Log("Stream error: " + errmsg);
                 Captury_freeErrorMessage(msg);
             }
             else
@@ -409,7 +415,7 @@ namespace Captury
                     Array.Resize(ref arTags, num + 1);
                     arTags[num] = new ARTag();
                     arTags[num].id = arTag.id;
-                    arTags[num].translation = ConvertPosition(new Vector3(arTag.ox, arTag.oy, arTag.oz));
+                    arTags[num].translation = ConvertPosition(new Vector3(arTag.ox, arTag.oy, arTag.oz)) + offsetToOrigin;
                     arTags[num].rotation = ConvertRotation(Quaternion.LookRotation(new Vector3(arTag.nx, arTag.ny, arTag.nz)).eulerAngles);
                     at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
                 }
@@ -635,32 +641,38 @@ namespace Captury
 
         public void setRotationConstraint(int id, string jointName, Transform t)
         {
-            if (skeletons.ContainsKey(id))
+            if (skeletons.ContainsKey(id) == false)
             {
                 Debug.Log("Cannot set rotation for " + jointName + ": no skeleton with id " + id);
                 return;
             }
             else
-                Debug.Log("Set " + jointName + "-rotation to " + t);
+            {
+                //Debug.Log("Set " + jointName + "-rotation to " + t);
+            }
             communicationMutex.WaitOne();
             CapturySkeleton skel = skeletons[id];
             communicationMutex.ReleaseMutex();
 
             int index;
             if (jointsWithConstraints.ContainsKey(jointName))
+            {
                 index = jointsWithConstraints[jointName];
+            }
             else
             {
                 index = 0;
                 foreach (CapturySkeletonJoint j in skel.joints)
                 {
                     if (j.name == jointName)
+                    {
                         break;
+                    } 
                     ++index;
                 }
                 if (index == skel.joints.Length)
                 {
-                    Debug.Log("Cannot set constraint for joint " + jointName + ": no such joint");
+                    //Debug.Log("Cannot set constraint for joint " + jointName + ": no such joint");
                     return;
                 }
             }
