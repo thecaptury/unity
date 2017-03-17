@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Text;
 using UnityEngine;
 
 namespace Captury
@@ -46,7 +45,7 @@ namespace Captury
         public int id;
         public float ox, oy, oz; // position
         public float nx, ny, nz; // normal
-	}
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct CapturyImage
@@ -120,6 +119,7 @@ namespace Captury
     {
         public string name;
         public int id;
+        public int playerID = -1;
         public CapturySkeletonJoint[] joints;
 
         private GameObject reference;
@@ -162,9 +162,18 @@ namespace Captury
         public bool consumed;
     }
 
+    [Serializable]
+    public class ARTag
+    {
+        public int id;
+        public Vector3 translation;
+        public Quaternion rotation;
+    }
+
     //====================
     // the network plugin
     //====================
+    [RequireComponent(typeof(CapturyOriginManager))]
     public class CapturyNetworkPlugin : MonoBehaviour
     {
         //=============================================
@@ -207,31 +216,40 @@ namespace Captury
         [DllImport("RemoteCaptury")]
         private static extern int Captury_getCameras(out IntPtr cameras);
         [DllImport("RemoteCaptury")]
-		private static extern IntPtr Captury_getCurrentARTags();
+        private static extern IntPtr Captury_getCurrentARTags();
         [DllImport("RemoteCaptury")]
         private static extern void Captury_freeARTags(IntPtr arTags);
 
-		// config settings
+        // config settings will be overriden by CapturyConfigManager.Config if it can be loaded
         public string host = "127.0.0.1";
         public ushort port = 2101;
         public float scaleFactor = 0.001f; // mm to m
         public int actorCheckTimeout = 500; // in ms
-		public bool streamARTags = false;
+        public bool streamARTags = false;
 
         // Events
-        public delegate void FoundSkeletonDelegate(CapturySkeleton skeleton, IntPtr actor);
-        public event FoundSkeletonDelegate foundSkeleton;
-        public delegate void LostSkeletonDelegate(CapturySkeleton skeleton);
-        public event LostSkeletonDelegate lostSkeleton;
+        public delegate void SkeletonDelegate(CapturySkeleton skeleton);
+        public event SkeletonDelegate SkeletonFound;
+        public event SkeletonDelegate SkeletonLost;
         public delegate void CamerasChangedDelegate(Vector3[] positions, Quaternion[] rotations);
         public event CamerasChangedDelegate CamerasChanged;
-        public delegate void DetectedARTagsDelegate(CapturyARTag[] artags);
-        public event DetectedARTagsDelegate detectedARTags;
+        public delegate void ARTagsDetectedDelegate(ARTag[] artags);
+        public event ARTagsDetectedDelegate ARTagsDetected;
 
         public Vector3[] cameraPositions;
         public Quaternion[] cameraOrientations;
-		
-		public CapturyARTag[] arTags = new CapturyARTag[0];
+
+        public ARTag[] arTags = new ARTag[0];
+
+        /// <summary>
+        /// Reference to <see cref="capturyOriginManager"/> which handles the origin of the coordinate system
+        /// </summary>
+        private CapturyOriginManager capturyOriginManager;
+
+        /// <summary>
+        /// Reference to the current <see cref="CapturyOrigin"/> in the scene which defines the origin of the coordinate system of all avatars
+        /// </summary>
+        private CapturyOrigin capturyOrigin;
 
         private string headJointName = "Head";
 
@@ -250,6 +268,25 @@ namespace Captury
         private Dictionary<int, CapturySkeleton> skeletons = new Dictionary<int, CapturySkeleton>();
         private Dictionary<int, CapturyMarkerTransform> headTransforms = new Dictionary<int, CapturyMarkerTransform>();
         private Dictionary<string, int> jointsWithConstraints = new Dictionary<string, int>();
+
+        void Awake()
+        {
+            // load config
+            CapturyConfig config = CapturyConfigManager.Config;
+            if (config != null)
+            {
+                host = config.host;
+                port = config.port;
+                scaleFactor = config.scaleFactor;
+                actorCheckTimeout = config.actorCheckTimeout;
+                streamARTags = config.streamARTags;
+                Debug.LogFormat("CapturyNetworkPlugin settings were overriden by values from {0}.", CapturyConfigManager.configFilePath);
+            }
+
+            // register to CapturyOrigin change event
+            capturyOriginManager = GetComponent<CapturyOriginManager>();
+            capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
+        }
 
         //=============================
         // this is run once at startup
@@ -300,82 +337,88 @@ namespace Captury
                 if (poseData == IntPtr.Zero)
                 {
                     // something went wrong, get error message
-                    //IntPtr msg = Captury_getLastErrorMessage();
-                    //string errmsg = Marshal.PtrToStringAnsi(msg);
-                    //Debug.Log("Stream error: " + errmsg);
-                    //Captury_freeErrorMessage(msg);
-                } else {
+                    IntPtr msg = Captury_getLastErrorMessage();
+                    string errmsg = Marshal.PtrToStringAnsi(msg);
+                    Debug.Log("Stream error: " + errmsg);
+                    Captury_freeErrorMessage(msg);
+                }
+                else
+                {
 
-					//Debug.Log("received pose for " + actorID);
+                    //Debug.Log("received pose for " + actorID);
 
-					// convert the pose
-					CapturyPose pose = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
+                    // convert the pose
+                    CapturyPose pose = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
 
-					// get the data into a float array
-					float[] values = new float[pose.numValues * 6];
-                    Debug.Log("received pose with " + pose.numValues + " values");
-					Marshal.Copy(pose.values, values, 0, pose.numValues * 6);
+                    // get the data into a float array
+                    float[] values = new float[pose.numValues * 6];
+                    Marshal.Copy(pose.values, values, 0, pose.numValues * 6);
 
-//                    for (int i = 0; i < pose.numValues * 6; i += 6)
-  //                  {
-    //                    Debug.Log("t " + values[i] + " " + values[i + 1] + " " + values[i + 2] + " r " + values[i + 3] + " " + values[i + 4] + " " + values[i + 5]);
-      //              }
+                    // now loop over all joints
+                    Vector3 pos = new Vector3();
+                    Vector3 rot = new Vector3();
 
-					// now loop over all joints
-					Vector3 pos = new Vector3();
-					Vector3 rot = new Vector3();
-					for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
-					{
-						// ignore any joints that do not map to a transform
-						if (skeletons[actorID].joints[jointID].transform == null)
-							continue;
+                    // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
+                    Vector3 offsetToOrigin = Vector3.zero;
+                    if (capturyOrigin != null)
+                    {
+                        offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
+                    }
 
-						// set offset and rotation
-						int baseIndex = jointID * 6;
-						pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
-						rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
+                    for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
+                    {
+                        // ignore any joints that do not map to a transform
+                        if (skeletons[actorID].joints[jointID].transform == null)
+                            continue;
 
-						skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos);
-						skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
-					}
+                        // set offset and rotation
+                        int baseIndex = jointID * 6;
+                        pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
+                        rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
 
-					// finally, free the pose data again, as we are finished
-					Captury_freePose(poseData);
-				}
+                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToOrigin;
+                        skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
+                    }
+
+                    // finally, free the pose data again, as we are finished
+                    Captury_freePose(poseData);
+                }
             }
 
-			// get artags
-			IntPtr arTagData = Captury_getCurrentARTags();
+            // get artags
+            IntPtr arTagData = Captury_getCurrentARTags();
 
-			// check if we actually got data, if not, continue
-			if (arTagData == IntPtr.Zero)
-			{
-				// something went wrong, get error message
-				//IntPtr msg = Captury_getLastErrorMessage();
-				//string errmsg = Marshal.PtrToStringAnsi(msg);
-				//Debug.Log("Stream error: " + errmsg);
-				//Captury_freeErrorMessage(msg);
-			} else {
-			
-				IntPtr at = arTagData;
-				int num;
-				for (num = 0; num < 100; ++num) {
-					CapturyARTag arTag = (CapturyARTag)Marshal.PtrToStructure(at, typeof(CapturyARTag));
-					if (arTag.id == -1)
-						break;
-					Array.Resize(ref arTags, num+1);
-					arTags[num] = arTag;
-					at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
-				}
-				if (num != 0 && detectedARTags != null)
-					detectedARTags(arTags);
-				else
-					Array.Resize(ref arTags, 0);
+            // check if we actually got data, if not, continue
+            if (arTagData == IntPtr.Zero)
+            {
+                // something went wrong, get error message
+                IntPtr msg = Captury_getLastErrorMessage();
+                string errmsg = Marshal.PtrToStringAnsi(msg);
+                Captury_freeErrorMessage(msg);
+            }
+            else
+            {
+                IntPtr at = arTagData;
+                int num;
+                for (num = 0; num < 100; ++num)
+                {
+                    CapturyARTag arTag = (CapturyARTag)Marshal.PtrToStructure(at, typeof(CapturyARTag));
+                    if (arTag.id == -1)
+                        break;
+                    Array.Resize(ref arTags, num + 1);
+                    arTags[num] = new ARTag();
+                    arTags[num].id = arTag.id;
+                    arTags[num].translation = ConvertPosition(new Vector3(arTag.ox, arTag.oy, arTag.oz));
+                    arTags[num].rotation = ConvertRotation(Quaternion.LookRotation(new Vector3(arTag.nx, arTag.ny, arTag.nz)).eulerAngles);
+                    at = new IntPtr(at.ToInt64() + Marshal.SizeOf(typeof(CapturyARTag)));
+                }
+                if (num != 0 && ARTagsDetected != null)
+                    ARTagsDetected(arTags);
+                else
+                    Array.Resize(ref arTags, 0);
 
-				Debug.Log("found artags: " + num);
-
-				Captury_freeARTags(arTagData);
-			}
+                Captury_freeARTags(arTagData);
+            }
 
             communicationMutex.ReleaseMutex();
         }
@@ -389,9 +432,9 @@ namespace Captury
             while (!communicationFinished)
             {
                 // wait for actorCheckTimeout ms before continuing
-                //Debug.Log ("Going to sleep...");
+                //			Debug.Log ("Going to sleep...");
                 Thread.Sleep(actorCheckTimeout);
-                //Debug.Log ("Waking up...");
+                //			Debug.Log ("Waking up...");
 
                 // now look for new data
 
@@ -407,9 +450,9 @@ namespace Captury
                     else
                         Debug.Log(String.Format("Unable to connect to Captury Live at {0}:{1} ", host, port));
 
-					IntPtr cameraData = IntPtr.Zero;
+                    IntPtr cameraData = IntPtr.Zero;
                     int numCameras = Captury_getCameras(out cameraData);
-					if (numCameras > 0 && cameraData != IntPtr.Zero)
+                    if (numCameras > 0 && cameraData != IntPtr.Zero)
                     {
                         cameraPositions = new Vector3[numCameras];
                         cameraOrientations = new Quaternion[numCameras];
@@ -425,14 +468,15 @@ namespace Captury
                             cameraOrientations[i] = ConvertRotation(new Vector3(camera.orientationX, camera.orientationY, camera.orientationZ));
                         }
                         // Fire cameras changed event
-						if (CamerasChanged != null)
-							CamerasChanged(cameraPositions, cameraOrientations);
+                        if (CamerasChanged != null)
+                        {
+                            CamerasChanged(cameraPositions, cameraOrientations);
+                        }
                     }
                 }
                 if (isSetup)
                 {
-					// grab actors
-                    Debug.Log("Getting actors");
+                    // grab actors
                     IntPtr actorData = IntPtr.Zero;
                     int numActors = Captury_getActors(out actorData);
                     if (numActors > 0 && actorData != IntPtr.Zero)
@@ -450,7 +494,7 @@ namespace Captury
                             // check if we already have it in our dictionary
                             if (skeletons.ContainsKey(actor.id)) // access to actors does not need to be locked here because the other thread is read-only
                             {
-                                //communicationMutex.ReleaseMutex();
+                                communicationMutex.ReleaseMutex();
                                 actorFound[actor.id] = 5;
                                 continue;
                             }
@@ -461,9 +505,9 @@ namespace Captury
                             CapturySkeleton skeleton = new CapturySkeleton();
                             ConvertActor(actor, ref skeleton);
 
-                            if (foundSkeleton != null)
+                            if (SkeletonFound != null)
                             {
-                                foundSkeleton(skeleton, actorData);
+                                SkeletonFound(skeleton);
                             }
 
                             //  and add it to the list of actors we are processing, making sure this is secured by the mutex
@@ -475,38 +519,36 @@ namespace Captury
                         }
                     }
 
-					if (!isConnected)
-					{
-						if (Captury_startStreaming(streamARTags ? 5 : 1) == 1) {
-							Debug.Log("Successfully started streaming data");
-							isConnected = true;
-						} else
-							Debug.LogWarning("failed to start streaming");
-					}
+                    if (!isConnected)
+                    {
+                        if (Captury_startStreaming(streamARTags ? 5 : 1) == 1)
+                        {
+                            Debug.Log("Successfully started streaming data");
+                            isConnected = true;
+                        }
+                        else
+                            Debug.LogWarning("failed to start streaming");
+                    }
 
                     // reduce the actor countdown by one for each actor
                     int[] keys = new int[actorFound.Keys.Count];
                     actorFound.Keys.CopyTo(keys, 0);
                     foreach (int key in keys)
-                    {
                         actorFound[key]--;
-                        Debug.Log(String.Format("actor {0} has {1} life left", key, actorFound[key]));
-                    }
                 }
 
                 // remove all actors that were not found in the past few actor checks
-                Debug.Log ("Updating actor structure");
+                //			Debug.Log ("Updating actor structure");
                 communicationMutex.WaitOne();
                 List<int> unusedKeys = new List<int>();
                 foreach (KeyValuePair<int, int> kvp in actorFound)
                 {
                     if (kvp.Value <= 0)
                     {
-                        Debug.Log("lost skeleton. i will tell everyone.");
-                        if (lostSkeleton != null)
+                        if (SkeletonLost != null)
                         {
                             Debug.Log("lost skeleton. telling all my friends.");
-                            lostSkeleton(skeletons[kvp.Key]);
+                            SkeletonLost(skeletons[kvp.Key]);
                         }
 
                         // remove actor
@@ -516,14 +558,14 @@ namespace Captury
                     }
                 }
                 communicationMutex.ReleaseMutex();
-                //Debug.Log("Updated actor structure");
+                //			Debug.Log ("Updating actor structure done");
 
                 // clear out actorfound structure
                 foreach (int key in unusedKeys)
                     actorFound.Remove(key);
 
                 // look for current transformation of bones with markers - the head
-/*                foreach (KeyValuePair<int, IntPtr> kvp in actorPointers)
+                foreach (KeyValuePair<int, IntPtr> kvp in actorPointers)
                 {
                     int id = kvp.Key;
 
@@ -543,7 +585,6 @@ namespace Captury
                         continue;
                     }
 
-                    Debug.Log("getting marker transform");
                     // get the transform and store it in headTransforms
                     IntPtr trafo = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(CapturyTransform)));
                     UInt64 timestamp = Captury_getMarkerTransform(kvp.Value, headJointIndex, trafo);
@@ -581,7 +622,7 @@ namespace Captury
                         communicationMutex.ReleaseMutex();
                     }
                     Marshal.FreeHGlobal(trafo);
-                }*/
+                }
             }
 
             Debug.Log("Disconnecting");
@@ -629,6 +670,15 @@ namespace Captury
             Marshal.StructureToPtr(euler, rotation, false);
             Captury_setRotationConstraint(id, index, rotation, Captury_getTime(), 1.0f);
             Marshal.FreeHGlobal(rotation);
+        }
+
+        /// <summary>
+        /// Called when <see cref="CapturyOrigin"/> changes and sets it as local variable.
+        /// </summary>
+        /// <param name="newCapturyOrigin"></param>
+        public void OnCapturyOriginChanged(CapturyOrigin capturyOrigin)
+        {
+            this.capturyOrigin = capturyOrigin;
         }
 
         //===============================================
@@ -692,7 +742,7 @@ namespace Captury
         //===========================================================================================================
         // Helper function to convert a rotation from Unity back to Captury Live (left-handed to right-handed, Y-up)
         //===========================================================================================================
-        public Quaternion ConvertRotationToLive(Quaternion rotation)
+        private Quaternion ConvertRotationToLive(Quaternion rotation)
         {
             Vector3 angles = rotation.eulerAngles;
 
@@ -706,7 +756,7 @@ namespace Captury
         //=============================================================================
         // Helper function to convert a rotation to the Euler angles Captury Live uses
         //=============================================================================
-        public Vector3 ConvertToEulerAngles(Quaternion quat)
+        private Vector3 ConvertToEulerAngles(Quaternion quat)
         {
             const float RAD2DEGf = 0.0174532925199432958f;
             Vector3 euler = new Vector3();
