@@ -1,0 +1,9 @@
+{
+	"arTagIDs" : [0,10],
+	"avatarID" : 0,
+	"host" : "127.0.0.1",
+	"port" : 2101,
+	"actorCheckTimeout" : 500,
+	"scaleFactor" : 0.001,
+	"streamARTags" : true
+}
