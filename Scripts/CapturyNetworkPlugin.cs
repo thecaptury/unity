@@ -122,6 +122,9 @@ namespace Captury
         public int playerID = -1;
         public CapturySkeletonJoint[] joints;
 
+        public IntPtr rawData = IntPtr.Zero;
+        public IntPtr retargetTarget = IntPtr.Zero;
+
         private GameObject reference;
         public GameObject mesh // reference to game object that is animated
         {
@@ -173,7 +176,6 @@ namespace Captury
     //====================
     // the network plugin
     //====================
-    [RequireComponent(typeof(CapturyOriginManager))]
     public class CapturyNetworkPlugin : MonoBehaviour
     {
         //=============================================
@@ -219,6 +221,8 @@ namespace Captury
         private static extern IntPtr Captury_getCurrentARTags();
         [DllImport("RemoteCaptury")]
         private static extern void Captury_freeARTags(IntPtr arTags);
+        [DllImport("Retargetery")]
+        private static extern IntPtr liveRetarget(IntPtr src, IntPtr tgt, IntPtr input);
 
         // config settings will be overriden by CapturyConfigManager.Config if it can be loaded
         public string host = "127.0.0.1";
@@ -242,16 +246,11 @@ namespace Captury
         public ARTag[] arTags = new ARTag[0];
 
         /// <summary>
-        /// Reference to <see cref="capturyOriginManager"/> which handles the origin of the coordinate system
+        /// you can set an offset to the world coordinate system
         /// </summary>
-        private CapturyOriginManager capturyOriginManager;
+        public Vector3 offsetToWorld = Vector3.zero;
 
-        /// <summary>
-        /// Reference to the current <see cref="CapturyOrigin"/> in the scene which defines the origin of the coordinate system of all avatars
-        /// </summary>
-        private CapturyOrigin capturyOrigin;
-
-        private string headJointName = "Head";
+        //private string headJointName = "Head";
 
         // threading data for communication with server
         private Thread communicationThread;
@@ -266,7 +265,7 @@ namespace Captury
         private Dictionary<int, IntPtr> actorPointers = new Dictionary<int, IntPtr>();
         private Dictionary<int, int> actorFound = new Dictionary<int, int>();
         private Dictionary<int, CapturySkeleton> skeletons = new Dictionary<int, CapturySkeleton>();
-        private Dictionary<int, CapturyMarkerTransform> headTransforms = new Dictionary<int, CapturyMarkerTransform>();
+        //private Dictionary<int, CapturyMarkerTransform> headTransforms = new Dictionary<int, CapturyMarkerTransform>();
         private Dictionary<string, int> jointsWithConstraints = new Dictionary<string, int>();
 
         void Awake()
@@ -282,10 +281,6 @@ namespace Captury
                 streamARTags = config.streamARTags;
                 Debug.LogFormat("CapturyNetworkPlugin settings were overriden by values from {0}.", CapturyConfigManager.configFilePath);
             }
-
-            // register to CapturyOrigin change event
-            capturyOriginManager = GetComponent<CapturyOriginManager>();
-            capturyOriginManager.CapturyOriginChanged += OnCapturyOriginChanged;
         }
 
         //=============================
@@ -348,7 +343,13 @@ namespace Captury
                     //Debug.Log("received pose for " + actorID);
 
                     // convert the pose
-                    CapturyPose pose = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
+                    CapturyPose pose;
+                    if (skeletons[actorID].retargetTarget != IntPtr.Zero)
+                    {
+                        IntPtr retargetedPose = liveRetarget(skeletons[actorID].rawData, skeletons[actorID].retargetTarget, poseData);
+                        pose = (CapturyPose)Marshal.PtrToStructure(retargetedPose, typeof(CapturyPose));
+                    } else
+                        pose = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
 
                     // get the data into a float array
                     float[] values = new float[pose.numValues * 6];
@@ -357,13 +358,6 @@ namespace Captury
                     // now loop over all joints
                     Vector3 pos = new Vector3();
                     Vector3 rot = new Vector3();
-
-                    // set origin offset based on CapturyOrigin, if existent. Otherwise keep world origin (0,0,0)
-                    Vector3 offsetToOrigin = Vector3.zero;
-                    if (capturyOrigin != null)
-                    {
-                        offsetToOrigin = capturyOrigin.OffsetToWorldOrigin;
-                    }
 
                     for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
                     {
@@ -376,7 +370,7 @@ namespace Captury
                         pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
                         rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
 
-                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToOrigin;
+                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToWorld;
                         skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
                     }
 
@@ -392,9 +386,9 @@ namespace Captury
             if (arTagData == IntPtr.Zero)
             {
                 // something went wrong, get error message
-                IntPtr msg = Captury_getLastErrorMessage();
-                string errmsg = Marshal.PtrToStringAnsi(msg);
-                Captury_freeErrorMessage(msg);
+                //IntPtr msg = Captury_getLastErrorMessage();
+                //string errmsg = Marshal.PtrToStringAnsi(msg);
+                //Captury_freeErrorMessage(msg);
             }
             else
             {
@@ -503,7 +497,7 @@ namespace Captury
                             // no? we need to convert it
                             IntPtr actorPointer = new IntPtr(actorData.ToInt64() + (szStruct * i));
                             CapturySkeleton skeleton = new CapturySkeleton();
-                            ConvertActor(actor, ref skeleton);
+                            ConvertActor(actor, actorData, ref skeleton);
 
                             if (SkeletonFound != null)
                             {
@@ -565,7 +559,7 @@ namespace Captury
                     actorFound.Remove(key);
 
                 // look for current transformation of bones with markers - the head
-                foreach (KeyValuePair<int, IntPtr> kvp in actorPointers)
+/*                foreach (KeyValuePair<int, IntPtr> kvp in actorPointers)
                 {
                     int id = kvp.Key;
 
@@ -622,7 +616,7 @@ namespace Captury
                         communicationMutex.ReleaseMutex();
                     }
                     Marshal.FreeHGlobal(trafo);
-                }
+                }*/
             }
 
             Debug.Log("Disconnecting");
@@ -672,19 +666,10 @@ namespace Captury
             Marshal.FreeHGlobal(rotation);
         }
 
-        /// <summary>
-        /// Called when <see cref="CapturyOrigin"/> changes and sets it as local variable.
-        /// </summary>
-        /// <param name="newCapturyOrigin"></param>
-        public void OnCapturyOriginChanged(CapturyOrigin capturyOrigin)
-        {
-            this.capturyOrigin = capturyOrigin;
-        }
-
         //===============================================
         // helper function to map an actor to a skeleton
         //===============================================
-        private void ConvertActor(CapturyActor actor, ref CapturySkeleton skel)
+        private void ConvertActor(CapturyActor actor, IntPtr actorData, ref CapturySkeleton skel)
         {
             if (skel == null)
             {
@@ -695,6 +680,7 @@ namespace Captury
             // copy data over
             skel.name = System.Text.Encoding.UTF8.GetString(actor.name);
             skel.id = actor.id;
+            skel.rawData = actorData;
 
             // create joints
             int szStruct = Marshal.SizeOf(typeof(CapturyJoint));
@@ -742,7 +728,7 @@ namespace Captury
         //===========================================================================================================
         // Helper function to convert a rotation from Unity back to Captury Live (left-handed to right-handed, Y-up)
         //===========================================================================================================
-        private Quaternion ConvertRotationToLive(Quaternion rotation)
+        public Quaternion ConvertRotationToLive(Quaternion rotation)
         {
             Vector3 angles = rotation.eulerAngles;
 
@@ -756,7 +742,7 @@ namespace Captury
         //=============================================================================
         // Helper function to convert a rotation to the Euler angles Captury Live uses
         //=============================================================================
-        private Vector3 ConvertToEulerAngles(Quaternion quat)
+        public Vector3 ConvertToEulerAngles(Quaternion quat)
         {
             const float RAD2DEGf = 0.0174532925199432958f;
             Vector3 euler = new Vector3();

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Linq;
 using UnityEngine;
 
@@ -11,6 +12,9 @@ namespace Captury
     [RequireComponent(typeof(CapturyNetworkPlugin), typeof(CapturyLeapIntegration))]
     public class CapturyAvatarManager : MonoBehaviour
     {
+        [DllImport("Retargetery")]
+        private static extern int liveGenerateMapping(System.IntPtr src, System.IntPtr tgt);
+
         [SerializeField]
         [Tooltip("Avatar prefabs for local players (without head). userAvatarID is set in the Captury config file (see CapturyConfigManager for more infos)")]
         private GameObject[] localAvatarPrefabs = new GameObject[] { };
@@ -187,6 +191,7 @@ namespace Captury
         private void OnSkeletonFound(CapturySkeleton skeleton)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
+
             lock (newSkeletons)
             {
                 newSkeletons.Add(skeleton);
@@ -327,6 +332,10 @@ namespace Captury
                 DestroyImmediate(skel.mesh);
             }
             skel.mesh = avatar;
+            Debug.Log("mesh instantiated");
+            //skel.retargetTarget = ConvertGameObjectToCapturyActor(avatar);
+
+            //liveGenerateMapping(skel.rawData, skel.retargetTarget);
         }
 
         /// <summary>
@@ -491,6 +500,46 @@ namespace Captury
         private bool IsLocalPlayer(CapturySkeleton skeleton)
         {
             return skeleton.Equals(playerSkeleton);
+        }
+
+        private System.IntPtr ConvertGameObjectToCapturyActor(GameObject g)
+        {
+            CapturyActor actor = new CapturyActor();
+
+            Transform[] trafos = g.GetComponentsInChildren<Transform>();
+            Debug.Log("have " + (trafos.Length - 1) + " children");
+            actor.name = System.Text.Encoding.ASCII.GetBytes(g.name);
+            actor.id = 17;
+            actor.numJoints = trafos.Length - 1;
+
+            System.IntPtr mem = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(CapturyActor)) + actor.numJoints * Marshal.SizeOf(typeof(CapturyJoint)));
+
+            actor.joints = new System.IntPtr(mem.ToInt64() + Marshal.SizeOf(typeof(CapturyActor)));
+
+            CapturyJoint[] joints = new CapturyJoint[trafos.Length - 1];
+
+            Dictionary<string, int> names = new Dictionary<string, int>();
+            names[trafos[0].name] = -1; // this is the overall parent
+
+            for (int i = 0; i < actor.numJoints; ++i)
+            {
+                names[trafos[i + 1].name] = i;
+                Debug.Log("joint " + trafos[i + 1].name);
+
+                joints[i].name = System.Text.Encoding.ASCII.GetBytes(trafos[i + 1].name);
+                joints[i].ox = trafos[i + 1].position.x;
+                joints[i].oy = trafos[i + 1].position.y;
+                joints[i].oz = trafos[i + 1].position.z;
+
+                Vector3 rot = networkPlugin.ConvertToEulerAngles(networkPlugin.ConvertRotationToLive(trafos[i + 1].rotation));
+                joints[i].rx = rot.x;
+                joints[i].ry = rot.y;
+                joints[i].rz = rot.z;
+
+                joints[i].parent = names[trafos[i + 1].parent.name];
+            }
+
+            return mem;
         }
     }
 }
