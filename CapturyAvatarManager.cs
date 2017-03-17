@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 
@@ -10,6 +13,15 @@ namespace Captury
     [RequireComponent(typeof(CapturyNetworkPlugin), typeof(CapturyLeapIntegration))]
     public class CapturyAvatarManager : MonoBehaviour
     {
+        [DllImport("Retargetery")]
+        private static extern int liveGenerateMapping(IntPtr src, IntPtr tgt);
+        [DllImport("Retargetery")]
+        private static extern IntPtr liveRetarget(IntPtr src, IntPtr tgt, IntPtr input);
+        [DllImport("Retargetery")]
+        private static extern int liveSaveMapping(IntPtr filename, IntPtr src, IntPtr tgt);
+        [DllImport("Retargetery")]
+        private static extern int liveLoadMapping(IntPtr filename, IntPtr src, IntPtr tgt);
+
         [SerializeField]
         [Tooltip("Avatar template which will be instantiated for each tracked Captury Avatar")]
         private GameObject avatarTemplateObject;
@@ -21,7 +33,7 @@ namespace Captury
         /// <summary>
         /// The OVRCameraRig which will be manipulated by the captury tracking
         /// </summary>
-        private OVRCameraRig ovrCameraRig;
+        //private OVRCameraRig ovrCameraRig;
 
         /// <summary>
         /// The <see cref="CapturyNetworkPlugin"/> which handles the connection to the captuy server
@@ -69,17 +81,19 @@ namespace Captury
         private const string AVATAR_RIGHT_HAND_TRANSFORM_NAME = "RightFingerBase";
         private const string AVATAR_HEAD_TRANSFORM_NAME = "Head";
 
+        private IntPtr retargetingTargetActor;
+
         void Start()
         {
             LoadConfig();
             networkPlugin = GetComponent<CapturyNetworkPlugin>();
             capturyLeapIntegration = GetComponent<CapturyLeapIntegration>();
 
-            ovrCameraRig = FindObjectOfType<OVRCameraRig>();
+            /*ovrCameraRig = FindObjectOfType<OVRCameraRig>();
             if (ovrCameraRig == null)
             {
                 Debug.LogError("No OVRCameraRig found. Make sure there's one in the Scene.");
-            }
+            }*/
 
             // keep the CapturyAvatarManager GameObject between scenes
             DontDestroyOnLoad(gameObject);
@@ -87,6 +101,8 @@ namespace Captury
             // register for skeleton events
             networkPlugin.foundSkeleton += FoundSkeleton;
             networkPlugin.lostSkeleton += LostSkeleton;
+
+            retargetingTargetActor = ConvertGameObjectToCapturyActor(avatarTemplateObject);
         }
 
         void OnDestroy()
@@ -117,11 +133,16 @@ namespace Captury
         /// Called when a new captury skeleton is found
         /// </summary>
         /// <param name="skeleton"></param>
-        void FoundSkeleton(CapturySkeleton skeleton)
+        /// <param name="actor">the same as skeleton</param>
+        void FoundSkeleton(CapturySkeleton skeleton, IntPtr actor)
         {
             Debug.Log("CapturyAvatarManager found skeleton with id " + skeleton.id + " and name " + skeleton.name);
+
+            liveGenerateMapping(retargetingTargetActor, actor);
+
             lock (newSkeletons)
             {
+                //liveGenerateMapping(actor, 
                 newSkeletons.Add(skeleton);
             }
         }
@@ -250,9 +271,9 @@ namespace Captury
             Debug.Log("Assigned local player to skeleton with name " + skeleton.name + " and id " + skeleton.id);
             if (head != null)
             {
-                ovrCameraRig.trackingSpace.parent = head;
+                /*ovrCameraRig.trackingSpace.parent = head;
                 ovrCameraRig.trackingSpace.localPosition = Vector3.zero;
-                ovrCameraRig.trackingSpace.localRotation = Quaternion.Euler(0, 180, 0);
+                ovrCameraRig.trackingSpace.localRotation = Quaternion.Euler(0, 180, 0);*/
             }
             else
             {
@@ -267,7 +288,7 @@ namespace Captury
         private void ClearPlayerAssignment()
         {
             capturyLeapIntegration.setTargetModel(null, null, -1);
-            ovrCameraRig.trackingSpace.parent = null;
+            //ovrCameraRig.trackingSpace.parent = null;
         }
 
         /// <summary>
@@ -303,8 +324,48 @@ namespace Captury
             }
             else
             {
-                Debug.LogError("No Captury config file found at " + CAPTURY_CONFIG_FILE_PATH);
+                Debug.Log("No Captury config file found at " + CAPTURY_CONFIG_FILE_PATH);
             }
+        }
+
+        private IntPtr ConvertGameObjectToCapturyActor(GameObject g)
+        {
+            CapturyActor actor = new CapturyActor();
+
+            Transform[] trafos = g.GetComponentsInChildren<Transform>();
+            Debug.Log("have " + (trafos.Length - 1) + " children");
+            actor.name = Encoding.ASCII.GetBytes(g.name);
+            actor.id = 17;
+            actor.numJoints = trafos.Length - 1;
+
+            IntPtr mem = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(CapturyActor)) + actor.numJoints * Marshal.SizeOf(typeof(CapturyJoint)));
+
+            actor.joints = new IntPtr(mem.ToInt64() + Marshal.SizeOf(typeof(CapturyActor)));
+
+            CapturyJoint[] joints = new CapturyJoint[trafos.Length - 1];
+
+            Dictionary<string, int> names = new Dictionary<string, int>();
+            names[trafos[0].name] = -1; // this is the overall parent
+
+            for (int i = 0; i < actor.numJoints; ++i)
+            {
+                names[trafos[i + 1].name] = i;
+                Debug.Log("joint " + trafos[i+1].name);
+
+                joints[i].name = Encoding.ASCII.GetBytes(trafos[i + 1].name);
+                joints[i].ox = trafos[i+1].position.x;
+                joints[i].oy = trafos[i+1].position.y;
+                joints[i].oz = trafos[i+1].position.z;
+
+                Vector3 rot = networkPlugin.ConvertToEulerAngles(networkPlugin.ConvertRotationToLive(trafos[i + 1].rotation));
+                joints[i].rx = rot.x;
+                joints[i].ry = rot.y;
+                joints[i].rz = rot.z;
+
+                joints[i].parent = names[trafos[i+1].parent.name];
+            }
+
+            return mem;
         }
     }
 }
