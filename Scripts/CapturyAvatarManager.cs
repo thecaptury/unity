@@ -115,7 +115,8 @@ namespace Captury
             if(defaultAvatar == null)
             {
                 Debug.LogError("defaultAvatar not set. Make sure you assign a Avatar prefab to CapturyAvatarManager.defaultAvatar");
-            }
+            }/* else
+                ConvertGameObjectToCapturyActor(defaultAvatar);*/
             if (localAvatarPrefabs.Length != remoteAvatarPrefabs.Length)
             {
                 Debug.LogError("localAvatarPrefabs.Length != remoteAvatarPrefabs.Length. For every localAvatarPrefab (without head) there has to be a remoteAvatarPrefab (with head) which will be spawned on remote experiences");
@@ -332,10 +333,23 @@ namespace Captury
                 DestroyImmediate(skel.mesh);
             }
             skel.mesh = avatar;
-            Debug.Log("mesh instantiated");
-            //skel.retargetTarget = ConvertGameObjectToCapturyActor(avatar);
+            skel.retargetTarget = ConvertGameObjectToCapturyActor(avatar);
 
-            //liveGenerateMapping(skel.rawData, skel.retargetTarget);
+
+/*            CapturyActor actor = new CapturyActor();
+            actor = (CapturyActor)Marshal.PtrToStructure(x, typeof(CapturyActor));
+
+            // no? we need to convert it
+            CapturySkeleton skeleton = new CapturySkeleton();
+            networkPlugin.ConvertActor(actor, x, ref skeleton);
+
+
+            CapturyActor srcActor = new CapturyActor();
+            srcActor = (CapturyActor)Marshal.PtrToStructure(skel.rawData, typeof(CapturyActor));
+            CapturySkeleton srcSkel = new CapturySkeleton();
+            networkPlugin.ConvertActor(srcActor, skel.rawData, ref srcSkel);
+            */
+            liveGenerateMapping(skel.rawData, skel.retargetTarget);
         }
 
         /// <summary>
@@ -513,32 +527,63 @@ namespace Captury
             actor.numJoints = trafos.Length - 1;
 
             System.IntPtr mem = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(CapturyActor)) + actor.numJoints * Marshal.SizeOf(typeof(CapturyJoint)));
-
             actor.joints = new System.IntPtr(mem.ToInt64() + Marshal.SizeOf(typeof(CapturyActor)));
 
+            actor.numBlobs = 0;
+            actor.blobs = System.IntPtr.Zero;
+
+            Marshal.StructureToPtr(actor, mem, false);
+
             CapturyJoint[] joints = new CapturyJoint[trafos.Length - 1];
+            Vector3[] globalPositions = new Vector3[trafos.Length - 1];
+            Vector3[] globalPositionsUnity = new Vector3[trafos.Length - 1];
+            Vector3[] trafoPos = new Vector3[trafos.Length];
 
             Dictionary<string, int> names = new Dictionary<string, int>();
             names[trafos[0].name] = -1; // this is the overall parent
 
+            System.IntPtr j = actor.joints;
             for (int i = 0; i < actor.numJoints; ++i)
             {
                 names[trafos[i + 1].name] = i;
-                Debug.Log("joint " + trafos[i + 1].name);
-
+                joints[i].parent = names[trafos[i + 1].parent.name];
+ 
                 joints[i].name = System.Text.Encoding.ASCII.GetBytes(trafos[i + 1].name);
-                joints[i].ox = trafos[i + 1].position.x;
-                joints[i].oy = trafos[i + 1].position.y;
-                joints[i].oz = trafos[i + 1].position.z;
+                Vector3 pos;
+                int parent = joints[i].parent;
+                if (parent != -1)
+                    pos = networkPlugin.ConvertPositionToLive(trafos[i + 1].position - trafos[i+1].parent.position);
+                else
+                    pos = networkPlugin.ConvertPositionToLive(trafos[i + 1].position);
+                joints[i].ox = pos.x;
+                joints[i].oy = pos.y;
+                joints[i].oz = pos.z;
 
-                Vector3 rot = networkPlugin.ConvertToEulerAngles(networkPlugin.ConvertRotationToLive(trafos[i + 1].rotation));
+                Vector3 rot = networkPlugin.ConvertToEulerAngles(networkPlugin.ConvertRotationToLive(trafos[i + 1].rotation * Quaternion.Inverse(trafos[i + 1].parent.rotation)));
                 joints[i].rx = rot.x;
                 joints[i].ry = rot.y;
                 joints[i].rz = rot.z;
 
-                joints[i].parent = names[trafos[i + 1].parent.name];
+                trafoPos[i] = trafos[i + 1].position;
+
+                globalPositions[i] = new Vector3(joints[i].ox, joints[i].oy, joints[i].oz);
+                int p = joints[i].parent;
+                if (p > -1)
+                    globalPositions[i] += globalPositions[p];
+                globalPositionsUnity[i] = networkPlugin.ConvertPosition(globalPositions[i]) - trafoPos[i];
+
+                Marshal.StructureToPtr(joints[i], j, false);
+                j = new System.IntPtr(j.ToInt64() + Marshal.SizeOf(typeof(CapturyJoint)));
             }
 
+            // get an actor
+            CapturyActor xactor = new CapturyActor();
+            xactor = (CapturyActor)Marshal.PtrToStructure(mem, typeof(CapturyActor));
+
+            // no? we need to convert it
+            CapturySkeleton skeleton = new CapturySkeleton();
+            networkPlugin.ConvertActor(xactor, mem, ref skeleton); //*/
+            
             return mem;
         }
     }
