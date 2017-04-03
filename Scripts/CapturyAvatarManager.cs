@@ -329,11 +329,12 @@ namespace Captury
             avatar.SetActive(true);
             if(skel.mesh != null)
             {
-                // destory old avatar
+                // destroy old avatar
                 DestroyImmediate(skel.mesh);
             }
             skel.mesh = avatar;
             skel.retargetTarget = ConvertGameObjectToCapturyActor(avatar);
+            skel.originalMesh = avatarPrefab;
 
 
 /*            CapturyActor actor = new CapturyActor();
@@ -559,10 +560,12 @@ namespace Captury
                 joints[i].oy = pos.y;
                 joints[i].oz = pos.z;
 
-                Vector3 rot = networkPlugin.ConvertToEulerAngles(networkPlugin.ConvertRotationToLive(trafos[i + 1].rotation * Quaternion.Inverse(trafos[i + 1].parent.rotation)));
-                joints[i].rx = rot.x;
-                joints[i].ry = rot.y;
-                joints[i].rz = rot.z;
+                Quaternion delta = trafos[i + 1].rotation;
+                Quaternion liveDelta = networkPlugin.ConvertRotationToLive(delta);
+                Vector3 rot = networkPlugin.ConvertToEulerAngles(liveDelta);
+                joints[i].rx = 0.0f;// rot.x;
+                joints[i].ry = 0.0f;// rot.y;
+                joints[i].rz = 0.0f;// rot.z;
 
                 trafoPos[i] = trafos[i + 1].position;
 

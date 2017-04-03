@@ -114,6 +114,7 @@ namespace Captury
         public Vector3 offset;
         public Vector3 orientation;
         public Transform transform;
+        public Transform originalTransform;
     }
 
     [Serializable]
@@ -127,6 +128,7 @@ namespace Captury
         public IntPtr rawData = IntPtr.Zero;
         public IntPtr retargetTarget = IntPtr.Zero;
 
+        public GameObject originalReference;
         private GameObject reference;
         public bool upToDate = true;
         public GameObject mesh // reference to game object that is animated
@@ -151,6 +153,34 @@ namespace Captury
                         if (tra.name.EndsWith(j.name))
                         {
                             j.transform = tra;
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+        public GameObject originalMesh // reference to game object that is animated
+        {
+            get { return originalReference; }
+            set
+            {
+                upToDate = false;
+                originalReference = value;
+                if (reference == null)
+                {
+                    foreach (CapturySkeletonJoint j in joints)
+                        j.originalTransform = null;
+                    return;
+                }
+                foreach (CapturySkeletonJoint j in joints)
+                {
+                    // check if the joint name matches a reference transform and assign it
+                    ArrayList children = originalReference.transform.GetAllChildren();
+                    foreach (Transform tra in children)
+                    {
+                        if (tra.name.EndsWith(j.name))
+                        {
+                            j.originalTransform = tra;
                             continue;
                         }
                     }
@@ -316,7 +346,7 @@ namespace Captury
                 return;
 
             // make sure we lock access before doing anything
-            //			Debug.Log ("Starting pose update...");
+            //            Debug.Log ("Starting pose update...");
             communicationMutex.WaitOne();
 
             // fetch current pose for all skeletons
@@ -350,21 +380,50 @@ namespace Captury
                     CapturyPose pose;
                     if (skeletons[actorID].retargetTarget != IntPtr.Zero)
                     {
-                        CapturyPose posex = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
-                        float[] valuex = new float[posex.numValues * 6];
-                        Marshal.Copy(posex.values, valuex, 0, posex.numValues * 6);
-                        Debug.Log("pose = " + String.Join(", ", new List<float>(valuex).ConvertAll(i => i.ToString()).ToArray()));
+        //                CapturyPose posex = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
+      //                  float[] valuex = new float[posex.numValues * 6];
+    //                    Marshal.Copy(posex.values, valuex, 0, posex.numValues * 6);
+  //                      for (int i = 0; i < posex.numValues * 6; i += 6)
+//                        {
+    //                        valuex[i + 0] = 300;
+  //                          valuex[i + 1] = 500;
+//                            valuex[i + 2] = 1000;
+//                            valuex[i + 3] = (Time.time * 30) % 360;
+  //                          valuex[i + 4] = (Time.time * 90) % 360;
+    //                        valuex[i + 5] = 0;
+      //                  }
+        //                Marshal.Copy(valuex, 0, posex.values, posex.numValues * 6);
+          //              Debug.Log("pose = " + String.Join(", ", new List<float>(valuex).ConvertAll(i => i.ToString()).ToArray()));
 
                         if (!skeletons[actorID].upToDate)
                         {
                             CapturyActor actor = (CapturyActor)Marshal.PtrToStructure(skeletons[actorID].retargetTarget, typeof(CapturyActor));
                             CapturySkeleton skel = skeletons[actorID];
+                            String[] jointNames = new String[skel.joints.Length];
+                            for (int i = 0; i < jointNames.Length; ++i)
+                                jointNames[i] = skel.joints[i].name;
+                            
                             IntPtr rawData = skel.rawData;
                             ConvertActor(actor, skeletons[actorID].retargetTarget, ref skel);
-                            skel.rawData = rawData;
-                            skeletons[actorID] = skel;
-                            skeletons[actorID].mesh = skeletons[actorID].mesh;
+                            skeletons[actorID].joints = skel.joints;
+                            skeletons[actorID].rawData = rawData;
+                            skeletons[actorID].mesh = skel.mesh;
+                            skeletons[actorID].originalMesh = skel.originalMesh;
                             skeletons[actorID].upToDate = true;
+                            
+                            for (int i = 0; i < skel.joints.Length; ++i) {
+                                bool found = false;
+                                for (int n = 0; n < jointNames.Length; ++n) {
+                                    if (skel.joints[i].name.EndsWith(jointNames[n]) || jointNames[n].EndsWith(skel.joints[i].name)) {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found) {
+                                    skel.joints[i].transform = null;
+                                    skel.joints[i].originalTransform = null;
+                                }
+                            }
                         }
 
                         IntPtr retargetedPose = liveRetarget(skeletons[actorID].rawData, skeletons[actorID].retargetTarget, poseData);
@@ -375,12 +434,12 @@ namespace Captury
                     // copy the data into a float array
                     float[] values = new float[pose.numValues * 6];
                     Marshal.Copy(pose.values, values, 0, pose.numValues * 6);
-                    Debug.Log("retargeted = " + String.Join(", ", new List<float>(values).ConvertAll(i => i.ToString()).ToArray()));
+//                    Debug.Log("retargeted = " + String.Join(", ", new List<float>(values).ConvertAll(i => i.ToString()).ToArray()));
 
-                    // now loop over all joints
                     Vector3 pos = new Vector3();
                     Vector3 rot = new Vector3();
 
+                    // now loop over all joints
                     for (int jointID = 0; jointID < skeletons[actorID].joints.Length; jointID++)
                     {
                         // ignore any joints that do not map to a transform
@@ -389,11 +448,12 @@ namespace Captury
 
                         // set offset and rotation
                         int baseIndex = jointID * 6;
-                        pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
+                        if (skeletons[actorID].joints[jointID].parent == -1) {
+                            pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
+                            skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToWorld;
+                        }
                         rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
-
-                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToWorld;
-                        skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot);
+                        skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot) * skeletons[actorID].joints[jointID].originalTransform.rotation;
                     }
 
                     // finally, free the pose data again, as we are finished
@@ -448,9 +508,9 @@ namespace Captury
             while (!communicationFinished)
             {
                 // wait for actorCheckTimeout ms before continuing
-                //			Debug.Log ("Going to sleep...");
+                //            Debug.Log ("Going to sleep...");
                 Thread.Sleep(actorCheckTimeout);
-                //			Debug.Log ("Waking up...");
+                //            Debug.Log ("Waking up...");
 
                 // now look for new data
 
@@ -554,7 +614,7 @@ namespace Captury
                 }
 
                 // remove all actors that were not found in the past few actor checks
-                //			Debug.Log ("Updating actor structure");
+                //            Debug.Log ("Updating actor structure");
                 communicationMutex.WaitOne();
                 List<int> unusedKeys = new List<int>();
                 foreach (KeyValuePair<int, int> kvp in actorFound)
@@ -574,7 +634,7 @@ namespace Captury
                     }
                 }
                 communicationMutex.ReleaseMutex();
-                //			Debug.Log ("Updating actor structure done");
+                //            Debug.Log ("Updating actor structure done");
 
                 // clear out actorfound structure
                 foreach (int key in unusedKeys)
@@ -750,7 +810,7 @@ namespace Captury
         //===========================================================================================================================
         // Helper function to convert a rotation from a right-handed Captury Live to left-handed Unity coordinate system (both Y-up)
         //===========================================================================================================================
-        private Quaternion ConvertRotation(Vector3 rotation)
+        public Quaternion ConvertRotation(Vector3 rotation)
         {
             Quaternion qx = Quaternion.AngleAxis(rotation.x, Vector3.right);
             Quaternion qy = Quaternion.AngleAxis(rotation.y, Vector3.down);
@@ -778,30 +838,33 @@ namespace Captury
         //=============================================================================
         public Vector3 ConvertToEulerAngles(Quaternion quat)
         {
-            const float RAD2DEGf = 0.0174532925199432958f;
+            const float RAD2DEGf = 57.29577951308232088f;
             Vector3 euler = new Vector3();
             float sqw = quat.w * quat.w;
             float sqx = quat.x * quat.x;
             float sqy = quat.y * quat.y;
             float sqz = quat.z * quat.z;
             float tmp1 = quat.x * quat.y;
-            float tmp2 = quat.z * quat.w;
-            euler[1] = (float)-Math.Asin(2.0 * (tmp1 - tmp2));
+            float tmp2 = quat.w * quat.z;
+            euler[1] = (float)-Math.Asin(Math.Min(Math.Max(2.0 * (quat.x*quat.z - quat.y*quat.w), -1.0f), 1.0f));
             float C = (float)Math.Cos(euler[1]);
             if (Math.Abs(C) > 0.005)
             {
-                euler[2] = (float)Math.Atan2(2.0f * (tmp1 + tmp2) / C, (sqx - sqy - sqz + sqw) / C) * RAD2DEGf;
-                euler[0] = (float)Math.Atan2(2.0f * (tmp1 + tmp2) / C, (-sqx - sqy + sqz + sqw) / C) * RAD2DEGf;
+                euler[2] = (float)Math.Atan2(2.0 * (quat.x*quat.y + quat.z*quat.w) / C, ( sqx - sqy - sqz + sqw) / C) * RAD2DEGf;
+                euler[0] = (float)Math.Atan2(2.0 * (quat.y*quat.z + quat.x*quat.w) / C, (-sqx - sqy + sqz + sqw) / C) * RAD2DEGf;
             }
             else
             {
                 euler[2] = 0;
                 if ((tmp1 - tmp2) < 0)
-                    euler[0] = (float)Math.Atan2(0.0f, (-sqx + sqy - sqz + sqw) * 0.5f + (tmp1 + tmp2)) * RAD2DEGf;
+                    euler[0] = (float)Math.Atan2((quat.x*quat.y - quat.z*quat.w) - (quat.y*quat.z - quat.x*quat.w), ((-sqx + sqy - sqz + sqw) + 2.0 * (quat.x*quat.z + quat.y*quat.w))*0.5f) * RAD2DEGf;
                 else
-                    euler[0] = (float)Math.Atan2(2 * (tmp1 - tmp2), (-sqx + sqy - sqz + sqw) * 0.5f - (tmp1 + tmp2)) * RAD2DEGf;
+                    euler[0] = (float)Math.Atan2((quat.x*quat.y - quat.z*quat.w) + (quat.y*quat.z - quat.x*quat.w), ((-sqx + sqy - sqz + sqw) - 2.0 * (quat.x*quat.z + quat.y*quat.w))*0.5f) * RAD2DEGf;
             }
             euler[1] *= RAD2DEGf;
+
+            if (Double.IsNaN(euler[0]) || Double.IsNaN(euler[1]) || Double.IsNaN(euler[2]))
+                return euler;
 
             return euler;
         }
