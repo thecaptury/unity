@@ -522,7 +522,7 @@ namespace Captury
             CapturyActor actor = new CapturyActor();
 
             Transform[] trafos = g.GetComponentsInChildren<Transform>();
-            Debug.Log("have " + (trafos.Length - 1) + " children");
+            //Debug.Log("have " + (trafos.Length - 1) + " children");
             actor.name = System.Text.Encoding.ASCII.GetBytes(g.name);
             actor.id = 17;
             actor.numJoints = trafos.Length - 1;
@@ -578,15 +578,7 @@ namespace Captury
                 Marshal.StructureToPtr(joints[i], j, false);
                 j = new System.IntPtr(j.ToInt64() + Marshal.SizeOf(typeof(CapturyJoint)));
             }
-
-            // get an actor
-            CapturyActor xactor = new CapturyActor();
-            xactor = (CapturyActor)Marshal.PtrToStructure(mem, typeof(CapturyActor));
-
-            // no? we need to convert it
-            CapturySkeleton skeleton = new CapturySkeleton();
-            networkPlugin.ConvertActor(xactor, mem, ref skeleton); //*/
-            
+           
             return mem;
         }
     }

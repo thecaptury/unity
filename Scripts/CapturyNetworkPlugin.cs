@@ -380,21 +380,6 @@ namespace Captury
                     CapturyPose pose;
                     if (skeletons[actorID].retargetTarget != IntPtr.Zero)
                     {
-        //                CapturyPose posex = (CapturyPose)Marshal.PtrToStructure(poseData, typeof(CapturyPose));
-      //                  float[] valuex = new float[posex.numValues * 6];
-    //                    Marshal.Copy(posex.values, valuex, 0, posex.numValues * 6);
-  //                      for (int i = 0; i < posex.numValues * 6; i += 6)
-//                        {
-    //                        valuex[i + 0] = 300;
-  //                          valuex[i + 1] = 500;
-//                            valuex[i + 2] = 1000;
-//                            valuex[i + 3] = (Time.time * 30) % 360;
-  //                          valuex[i + 4] = (Time.time * 90) % 360;
-    //                        valuex[i + 5] = 0;
-      //                  }
-        //                Marshal.Copy(valuex, 0, posex.values, posex.numValues * 6);
-          //              Debug.Log("pose = " + String.Join(", ", new List<float>(valuex).ConvertAll(i => i.ToString()).ToArray()));
-
                         if (!skeletons[actorID].upToDate)
                         {
                             CapturyActor actor = (CapturyActor)Marshal.PtrToStructure(skeletons[actorID].retargetTarget, typeof(CapturyActor));
@@ -434,7 +419,6 @@ namespace Captury
                     // copy the data into a float array
                     float[] values = new float[pose.numValues * 6];
                     Marshal.Copy(pose.values, values, 0, pose.numValues * 6);
-//                    Debug.Log("retargeted = " + String.Join(", ", new List<float>(values).ConvertAll(i => i.ToString()).ToArray()));
 
                     Vector3 pos = new Vector3();
                     Vector3 rot = new Vector3();
@@ -448,10 +432,8 @@ namespace Captury
 
                         // set offset and rotation
                         int baseIndex = jointID * 6;
-                        if (skeletons[actorID].joints[jointID].parent == -1) {
-                            pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
-                            skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToWorld;
-                        }
+                        pos.Set(values[baseIndex + 0], values[baseIndex + 1], values[baseIndex + 2]);
+                        skeletons[actorID].joints[jointID].transform.position = ConvertPosition(pos) + offsetToWorld;
                         rot.Set(values[baseIndex + 3], values[baseIndex + 4], values[baseIndex + 5]);
                         skeletons[actorID].joints[jointID].transform.rotation = ConvertRotation(rot) * skeletons[actorID].joints[jointID].originalTransform.rotation;
                     }
